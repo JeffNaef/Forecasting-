@@ -1,0 +1,186 @@
+---
+title: "SARIMA Models: Capturing Seasonal Effects"
+output: html_document
+date: "2025-08-12"
+---
+
+
+# Introduction to Seasonal ARIMA Models
+
+Seasonal ARIMA models extend regular ARIMA to capture seasonal patterns. The notation is:
+**SARIMA(p,d,q)(P,D,Q)_s**
+
+Where:
+
+-**(p,d,q)**: Non-seasonal ARIMA components
+
+-**(P,D,Q)**: Seasonal ARIMA components  
+
+-**s**: Seasonal period (4 for quarterly, 12 for monthly)
+
+## Seasonal ARIMA models
+
+| ARIMA | $~\underbrace{(p, d, q)}$ | $\underbrace{(P, D, Q)_{s}}$ |
+| ----: | :-----------------------: | :--------------------------: |
+|       | ${\uparrow}$              | ${\uparrow}$                 |
+|       | Non-seasonal part         | Seasonal part of             |
+|       | of the model              | of the model                 |
+
+where $s =$ number of observations per year.
+
+
+**Mathematical form:**
+$$\Phi_P^s(L)\Phi_p(L)(1-L)^d (1-L^s)^D Y_t = \Theta_Q^s(L)\theta_q(L)\varepsilon_t$$
+
+```{r setup, message=FALSE, warning=FALSE}
+# Load required libraries
+library(ggplot2)
+library(forecast)
+library(dplyr)
+library(gridExtra)
+library(seasonal)
+library(astsa)
+library(fpp3)
+
+# Set seed for reproducibility
+set.seed(1)
+
+# Create time points
+n_years <- 20
+n_obs <- n_years * 12  # Monthly data
+time_monthly <- 1:n_obs
+time_dates <-  seq(as.Date("2014-01-01"), by = "month", length.out = n_obs)
+```
+
+## The Simplest Seasonal Models
+
+Let's start with the most basic seasonal patterns and build complexity gradually.
+
+### 1. Pure Seasonal MA: $SARIMA(0,0,0)(0,0,1)_{12}$
+
+This is the simplest seasonal model: $Y_t = \varepsilon_t + \Theta_1 \varepsilon_{t-12}$
+
+```{r seasonal_ma}
+# Simulate SARIMA(0,0,0)(0,0,1)_{12}
+# Y_t = ε_t + vartheta_1 ε_{t-12}
+seasonal_ma <- sarima.sim(n = n_obs, sma=0.5, S=12, sd=1)
+
+# Create tsibble
+ma_tsibble <- tsibble(
+  time = time_monthly, #time_dates,
+  value = as.numeric(seasonal_ma),
+  model = "Seasonal MA(1): vartheta_1 = 0.5",
+  index = time
+)
+
+
+ma_tsibble|>
+ gg_tsdisplay(value, plot_type = "partial", lag = 36)  
+  
+  #gg_tsdisplay(difference(Employed, 12), plot_type = "partial", lag = 36) 
+```
+For a $SARIMA(0,0,0)(0,0,1)_{12}$ (seasonal MA(1)), we expect a spike at lag 12 in the ACF, but no other significant lags, which is more or less what we see in the left plot. The PACF on the other hand should show exponential decay in the seasonal lags $s$, i.e. here at lags 12, 24, 36, $\ldots$. This can be seen in the right plot.
+
+
+### 2. Pure Seasonal AR: $SARIMA(0,0,0)(1,0,0)_{12}$
+
+This model shows seasonal persistence: $Y_t = \Phi_1 Y_{t-12} + \varepsilon_t$
+
+```{r seasonal_ar}
+# Simulate SARIMA(0,0,0)(1,0,0)_12
+# Y_t = varphi_1 Y_{t-12} + ε_t
+seasonal_ar <-  sarima.sim(n = n_obs, sar=0.5, S=12, sd=1)
+
+ar_tsibble <- tsibble(
+  time = time_monthly, #time_dates,
+  value = as.numeric(seasonal_ar),
+  model = "Seasonal AR(1): varphi_1 = 0.5",
+  index = time
+)
+
+
+ar_tsibble|>
+ gg_tsdisplay(value, plot_type = "partial", lag = 36) 
+```
+For a $SARIMA(0,0,0)(1,0,0)_{12}$ (seasonal AR) we expect an exponential decay in the seasonal lags of the ACF, which can be seen in the left plot. Moreover, we expect a single significant spike in the PACF at lag 12, as seen on the right.   
+
+
+### 3. Seasonal Differencing: $SARIMA(0,0,0)(0,1,0)_{12}$
+
+Using first differencing, allows to put trends into the dataset (since shocks do not die out quickly): Consider $(1-\varphi_1 L^{12})(1-L)Y_t = \varepsilon_t$
+
+```{r seasonal_differencing}
+# Create a series with seasonal trend
+# Simulate SARIMA(0,1,0)(1,0,0)_12
+# (1-L)Y_t = 0.5 (1-L)Y_{t-12} + ε_t
+seasonal_trend_series <- sarima.sim(n = n_obs, sar=0.5, d=1, S=12, sd=0.2)
+
+
+ar_d_tsibble <- tsibble(
+  time = time_monthly, #time_dates,
+  value = as.numeric(seasonal_trend_series),
+  model = "Seasonal Integrated AR(1): varphi_1 = 0.5",
+  index = time
+)
+
+
+ar_d_tsibble|>
+ gg_tsdisplay(value, plot_type = "partial", lag = 36) 
+
+```
+
+We can see the clear nonstationary behavior with a seasonal component in the overall plot and also the acf which decreases very slowly. Differencing once we obtain the seasonal AR(1) model from before:
+
+```{r}
+ar_d_tsibble|>
+gg_tsdisplay(difference(value), plot_type = "partial", lag = 36) +
+  labs(title = "First differenced", y = "")
+```
+
+
+
+### 4. Seasonal Differencing: SARIMA(0,1,0)(0,1,0)₁₂
+
+We can also generate complex seasonal nonstationarie series with the full SARIMA model. Here we consider a $SARIMA(1,1,0)(1,1,1)_{12}:$
+
+```{r seasonal_first_differencing}
+# Create a series with seasonal trend
+# Simulate SARIMA(0,1,0)(1,0,0)_12
+# (1-L)Y_t = phi_1 (1-L)Y_{t-12} + ε_t
+seasonal_trend_series <- sarima.sim(n = n_obs, sar=0.5, ar=0.2, d=1, D=1, S=12, sd=0.2)
+
+
+ar_d_D_tsibble <- tsibble(
+  time = time_monthly, #time_dates,
+  value = as.numeric(seasonal_trend_series),
+  model = "Seasonal Integrated AR(1): varphi_1 = 0.5",
+  index = time
+)
+
+
+ar_d_D_tsibble|>
+ gg_tsdisplay(value, plot_type = "partial", lag = 36) 
+```
+
+Now it is necessary to take the lagged difference, as well as the first difference to get a clearer picture:
+
+```{r}
+ar_d_tsibble|>
+gg_tsdisplay(difference(difference(value, 12)), plot_type = "partial", lag = 36)+ 
+labs(title = "Double differenced", y = "")
+```
+
+
+
+
+## Summary
+
+**Seasonal ARIMA models** are essential for time series with regular seasonal patterns:
+
+- **Simple seasonal models** (pure AR or MA) are good starting points
+- **Seasonal differencing** removes seasonal trends  
+- **Combined models** capture both short-term and seasonal dependencies
+- **Automatic selection** (like `ARIMA()`) provides excellent starting points
+- **Forecasting** naturally incorporates seasonal patterns
+
+**Key advantage**: Seasonal ARIMA models provide a systematic framework for decomposing time series into trend, seasonal, and irregular components while maintaining the ability to generate probabilistic forecasts.

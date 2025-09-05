@@ -1,0 +1,153 @@
+---
+title: "Problem Dependent Modelling Example: Google Stock Price"
+output: html_document
+date: "2025-07-07"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(doSNOW)
+library(fpp3)
+library(forecast)
+library(patchwork)
+library(dCovTS)
+set.seed(2)
+```
+
+```{r}
+google_2018 <- gafa_stock |>
+  filter(Symbol == "GOOG", year(Date) == 2018)
+google_2018 |>
+  autoplot(Close) +
+  labs(y = "Closing stock price ($USD)")
+```
+
+We see a series that seems quite eradic. To understand it better, we plot the autocorrelation function (acf):
+
+```{r}
+google_2018 |>
+  ACF(Close) |>
+  autoplot()
+```
+
+We see that there is a clear (linear) dependence between $Y_t$ and its lags $Y_{t-h}$, even up to $h=20$. However, let's see what happens if we use first differencing:
+
+```{r}
+google_2018 |>
+  autoplot(difference(Close)) +
+  labs(y = "Change in Google closing stock price ($USD)")
+```
+
+The plot now corresponds to the **change** in Google's stock prices in USD. We see that this looks a lot like independent noise! To assess whether $Y_t$ and its lags $Y_{t-h}$ are independent, we again check the acf function:
+
+```{r}
+google_2018 |>
+  ACF(difference(Close)) |>
+  autoplot()
+```
+
+After differencing, the acf values are as we would expect for an independent series ($5\%$ of violations are expected). However since the acf is only able to deal with linear dependence, we also employ a more general, the auto-distance correlation measure to double check:
+
+```{r}
+google_2018 |>
+  mutate(diff_close = difference(Close)) |>
+  pull(diff_close) |>
+  na.omit() |>
+  ADCFplot()
+```
+
+Again we see that the values are inside the (simultaneous) confidence band, meaning we cannot reject the NULL of independence.
+
+In summary:
+
+-   The differences are the **day-to-day** changes.
+-   Now the series looks just like a white noise series:
+    -   No autocorrelations outside the 95% limits.
+    -   No distance-correlation outside the 95% limits.
+-   **Conclusion:** The daily change in the Google stock price is essentially a random quantity uncorrelated with previous days.
+
+## Fit and Predict an AR(1) model on data
+
+```{r}
+library(forecast)
+
+H=10 ## How many steps ahead
+
+# Fit AR(1) - treats it as a simple numeric vector
+ar1_model <- Arima(google_2018$Close, order = c(1, 0, 0))
+
+# Forecast
+predictions <- forecast(ar1_model, h = H)
+
+# Plot
+autoplot(predictions) +
+  labs(title = "AR(1) Forecast", y = "Close Price")
+```
+
+
+## Fit and Predict DRF on data
+
+```{r}
+## This will not work well here though!
+library(drf)
+source("drfown.R")
+n<-length(google_2018$Close)
+X<-as.matrix(google_2018$Close[1:(n-1)])
+Y<-as.matrix(google_2018$Close[2:n])
+
+fit<-drfown(X=X, Y=Y)
+
+B<-100
+
+Ypred<-matrix(NaN, nrow=H+1, ncol=B)
+Ypred[1,]<-rep(google_2018$Close[n],B)
+
+##Predict a path
+for (b in 1:B){
+  
+  for (h in 2:(H+1)){
+    # start from last (h-1) prediction in the same "world" b 
+  DRFw <- predict(fit, newdata =Ypred[h-1,b] )$weights
+  ## Draw path
+  sig<-abs(n^(-1/5)/drf:::medianHeuristic(Y))
+  mean<-Y[sample(1:nrow(Y), size=1, replace = T, DRFw[1,])]
+    
+  Ypred[h,b]<-rnorm(n=1, mean = mean, sd =sig )
+  
+  }
+  
+}
+
+
+point_forecasts <- rowMeans(Ypred[2:(H+1),]) #pred_matrix[, "Point Forecast"]
+lower_80 <- apply(Ypred[2:(H+1),], 1, quantile, probs = 0.1 )  #pred_matrix[, "Lo 80"]
+upper_80 <- apply(Ypred[2:(H+1),], 1, quantile, probs = 0.9 ) #pred_matrix[, "Hi 80"]
+lower_95 <- apply(Ypred[2:(H+1),], 1, quantile, probs = 0.025 ) #pred_matrix[, "Lo 95"]
+upper_95 <- apply(Ypred[2:(H+1),], 1, quantile, probs = 0.975 )
+
+# Create a manual forecast object
+manual_forecast <- structure(
+  list(
+    mean = ts(point_forecasts, start=n+1, end=n+H),
+    lower = cbind(lower_80, lower_95),
+    upper = cbind(upper_80, upper_95),
+    level = c(80, 95),
+    x = ts(google_2018$Close)  # your original data
+  ),
+  class = "forecast"
+)
+
+# Plot it
+autoplot(manual_forecast) +
+  labs(title = "DRF(1) Forecast", 
+       y = "Close Price", 
+       x = "Time")
+
+```
+
+
+
+
+
+
+

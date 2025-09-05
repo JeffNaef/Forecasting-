@@ -1,0 +1,356 @@
+---
+title: "VAR Models"
+output: html_document
+date: "2025-08-12"
+---
+  
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.align = 'center')
+# Load required libraries
+library(vars)
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+library(MASS)
+library(reshape2)
+library(viridis)
+```
+
+# Introduction to VAR Models
+
+Vector Autoregression (VAR) models are multivariate time series models that capture the linear interdependencies among multiple time series. In a bivariate VAR(p) model, each variable is modeled as a linear function of p lags of both variables.
+
+The general form of a VAR(1) model with two variables is:
+  
+  $$
+  \begin{bmatrix}
+y_{1,t} \\
+y_{2,t}
+\end{bmatrix} = 
+  \begin{bmatrix}
+c_1 \\
+c_2
+\end{bmatrix} +
+  \begin{bmatrix}
+\phi_{11} & \phi_{12} \\
+\phi_{21} & \phi_{22}
+\end{bmatrix}
+\begin{bmatrix}
+y_{1,t-1} \\
+y_{2,t-1}
+\end{bmatrix} +
+  \begin{bmatrix}
+\varepsilon_{1,t} \\
+\varepsilon_{2,t}
+\end{bmatrix}$$
+  
+
+# Pattern 1: Positive Cross-Lagged Effects
+
+This pattern shows how variables can reinforce each other over time, creating positive feedback loops.
+
+```{r pattern1}
+# Set parameters for positive cross-lagged effects
+set.seed(42)
+T <- 200
+phi_matrix_1 <- matrix(c(0.3, 0.4,   # y1 depends on lagged y1 and y2
+                         0.5, 0.2), nrow = 2, byrow = TRUE)  # y2 depends on lagged y1 and y2
+
+# Generate VAR(1) process
+y <- matrix(0, nrow = T, ncol = 2)
+y[1, ] <- c(0, 0)  # Initial values
+
+# Error covariance matrix
+sigma <- matrix(c(1, 0.3, 0.3, 1), nrow = 2)
+
+for(t in 2:T) {
+  errors <- mvrnorm(1, mu = c(0, 0), Sigma = sigma)
+  y[t, ] <- phi_matrix_1 %*% y[t-1, ] + errors
+}
+
+# Create data frame
+data1 <- data.frame(
+  time = 1:T,
+  Y1 = y[, 1],
+  Y2 = y[, 2]
+)
+
+# Time series plot
+p1_ts <- ggplot(data1, aes(x = time)) +
+  geom_line(aes(y = Y1, color = "Y1"), linewidth = 0.8) +
+  geom_line(aes(y = Y2, color = "Y2"), linewidth = 0.8) +
+  scale_color_manual(values = c("Y1" = "#e74c3c", "Y2" = "#3498db")) +
+  labs(title = "Pattern 1: Positive Cross-Lagged Effects",
+       subtitle = "phi_12 = 0.4, phi_21 = 0.5 (mutual reinforcement)",
+       x = "Time", y = "Value", color = "Variable") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+# Scatter plot (Y2 vs Y1)
+p1_phase <- ggplot(data1, aes(x = Y1, y = Y2)) +
+  geom_point(aes(color = time), size = 2, alpha = 0.7) +
+  geom_smooth(method = "lm", se = TRUE, color = "#e74c3c", linewidth = 1) +
+  scale_color_viridis_c(name = "Time") +
+  labs(title = "Scatter Plot: Y2 vs Y1",
+       subtitle = paste("Correlation:", round(cor(data1$Y1, data1$Y2), 3)),
+       x = "Y1", y = "Y2") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+grid.arrange(p1_ts, p1_phase, ncol = 2)
+
+# Display coefficient matrix
+cat("Coefficient Matrix (Φ):\n")
+print(phi_matrix_1)
+```
+
+
+
+# Pattern 2: Negative Cross-Lagged Effects
+
+This pattern demonstrates oscillatory behavior where variables tend to counteract each other.
+
+```{r pattern2}
+# Set parameters for negative cross-lagged effects
+phi_matrix_2 <- matrix(c(0.2, -0.6,   # Y1 negatively affected by lagged Y2
+                         -0.4,  0.3), nrow = 2, byrow = TRUE)  # Y2 negatively affected by lagged Y1
+
+# Generate VAR(1) process
+y2 <- matrix(0, nrow = T, ncol = 2)
+y2[1, ] <- c(1, -1)  # Different initial values
+
+for(t in 2:T) {
+  errors <- mvrnorm(1, mu = c(0, 0), Sigma = sigma)
+  y2[t, ] <- phi_matrix_2 %*% y2[t-1, ] + errors
+}
+
+data2 <- data.frame(
+  time = 1:T,
+  Y1 = y2[, 1],
+  Y2 = y2[, 2]
+)
+
+# Time series plot
+p2_ts <- ggplot(data2, aes(x = time)) +
+  geom_line(aes(y = Y1, color = "Y1"), linewidth = 0.8) +
+  geom_line(aes(y = Y2, color = "Y2"), linewidth = 0.8) +
+  scale_color_manual(values = c("Y1" = "#e74c3c", "Y2" = "#3498db")) +
+  labs(title = "Pattern 2: Negative Cross-Lagged Effects",
+       subtitle = "phi_12 = -0.6, phi_21 = -0.4 (oscillatory behavior)",
+       x = "Time", y = "Value", color = "Variable") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+# Scatter plot
+p2_phase <- ggplot(data2, aes(x = Y1, y = Y2)) +
+  geom_point(aes(color = time), size = 2, alpha = 0.7) +
+  geom_smooth(method = "lm", se = TRUE, color = "#e67e22", linewidth = 1) +
+  scale_color_viridis_c(name = "Time") +
+  labs(title = "Scatter Plot: Y2 vs Y1",
+       subtitle = paste("Correlation:", round(cor(data2$Y1, data2$Y2), 3)),
+       x = "Y1", y = "Y2") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+grid.arrange(p2_ts, p2_phase, ncol = 2)
+
+cat("Coefficient Matrix (Φ):\n")
+print(phi_matrix_2)
+```
+
+# Pattern 3: Granger Causality (Y1 → Y2)
+
+This pattern shows unidirectional causality where Y1 influences Y2 but not vice versa.
+
+```{r pattern3}
+# Granger causality: Y1 causes Y2, but Y2 doesn't cause Y1
+phi_matrix_3 <- matrix(c(0.7,  0.0,   # Y1 only depends on its own lag
+                         0.8,  0.3), nrow = 2, byrow = TRUE)  # Y2 depends on both lags
+
+y3 <- matrix(0, nrow = T, ncol = 2)
+y3[1, ] <- c(0.5, 0)
+
+for(t in 2:T) {
+  errors <- mvrnorm(1, mu = c(0, 0), Sigma = sigma)
+  y3[t, ] <- phi_matrix_3 %*% y3[t-1, ] + errors
+}
+
+data3 <- data.frame(
+  time = 1:T,
+  Y1 = y3[, 1],
+  Y2 = y3[, 2]
+)
+
+# Time series plot
+p3_ts <- ggplot(data3, aes(x = time)) +
+  geom_line(aes(y = Y1, color = "Y1"), linewidth = 0.8) +
+  geom_line(aes(y = Y2, color = "Y2"), linewidth = 0.8) +
+  scale_color_manual(values = c("Y1" = "#e74c3c", "Y2" = "#3498db")) +
+  labs(title = "Pattern 3: Granger Causality (Y1 → Y2)",
+       subtitle = "phi_12 = 0, phi_21 = 0.8 (unidirectional influence)",
+       x = "Time", y = "Value", color = "Variable") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+# Phase plot
+p3_phase <- ggplot(data3, aes(x = Y1, y = Y2)) +
+  geom_point(aes(color = time), size = 2, alpha = 0.7) +
+  geom_smooth(method = "lm", se = TRUE, color = "#27ae60", linewidth = 1) +
+  scale_color_viridis_c(name = "Time") +
+  labs(title = "Scatter Plot: Y2 vs Y1",
+       subtitle = paste("Correlation:", round(cor(data3$Y1, data3$Y2), 3)),
+       x = "Y1", y = "Y2") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+grid.arrange(p3_ts, p3_phase, ncol = 2)
+
+cat("Coefficient Matrix (Φ):\n")
+print(phi_matrix_3)
+```
+
+# Pattern 4: Near Unit Root Behavior
+
+This pattern shows highly persistent series with strong momentum.
+
+```{r pattern4}
+# Near unit root with cross-effects
+phi_matrix_4 <- matrix(c(0.95, 0.1,   # High persistence in Y1
+                         0.05, 0.9), nrow = 2, byrow = TRUE)  # High persistence in Y2
+
+y4 <- matrix(0, nrow = T, ncol = 2)
+y4[1, ] <- c(1, -0.5)
+
+for(t in 2:T) {
+  errors <- mvrnorm(1, mu = c(0, 0), Sigma = sigma * 0.5)  # Smaller error variance
+  y4[t, ] <- phi_matrix_4 %*% y4[t-1, ] + errors
+}
+
+data4 <- data.frame(
+  time = 1:T,
+  Y1 = y4[, 1],
+  Y2 = y4[, 2]
+)
+
+p4_ts <- ggplot(data4, aes(x = time)) +
+  geom_line(aes(y = Y1, color = "Y1"), linewidth = 0.8) +
+  geom_line(aes(y = Y2, color = "Y2"), linewidth = 0.8) +
+  scale_color_manual(values = c("Y1" = "#e74c3c", "Y2" = "#3498db")) +
+  labs(title = "Pattern 4: Near Unit Root Behavior",
+       subtitle = "φ₁₁ = 0.95, φ₂₂ = 0.9 (high persistence)",
+       x = "Time", y = "Value", color = "Variable") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+p4_phase <- ggplot(data4, aes(x = Y1, y = Y2)) +
+  geom_point(aes(color = time), size = 2, alpha = 0.7) +
+  geom_smooth(method = "lm", se = TRUE, color = "#f39c12", linewidth = 1) +
+  scale_color_viridis_c(name = "Time") +
+  labs(title = "Scatter Plot: Y2 vs Y1",
+       subtitle = paste("Correlation:", round(cor(data4$Y1, data4$Y2), 3)),
+       x = "Y1", y = "Y2") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+grid.arrange(p4_ts, p4_phase, ncol = 2)
+
+cat("Coefficient Matrix (Φ):\n")
+print(phi_matrix_4)
+```
+
+# Impulse Response Functions
+
+Impulse response functions show how a shock to one variable affects the system over time.
+
+```{r irf}
+# Convert to time series objects and estimate VAR
+ts_data1 <- ts(data1[, c("Y1", "Y2")])
+var_model <- VAR(ts_data1, p = 1, type = "const")
+
+# Compute impulse response functions
+irf_result <- irf(var_model, n.ahead = 20, boot = TRUE, ci = 0.95)
+
+# Plot IRFs
+plot(irf_result, main = "Impulse Response Functions - Pattern 1")
+```
+
+# Cross-Correlation Analysis
+
+Understanding the lead-lag relationships between variables.
+
+```{r ccf}
+# Cross-correlation function
+par(mfrow = c(2, 2))
+
+# Pattern 1: Positive cross-lagged
+ccf_result1 <- ccf(data1$Y1, data1$Y2, main = "CCF: Pattern 1 (Positive Cross-lagged)")
+
+# Pattern 2: Negative cross-lagged  
+ccf_result2 <- ccf(data2$Y1, data2$Y2, main = "CCF: Pattern 2 (Negative Cross-lagged)")
+
+# Pattern 3: Granger causality
+ccf_result3 <- ccf(data3$Y1, data3$Y2, main = "CCF: Pattern 3 (Granger Causality)")
+
+# Pattern 4: Near unit root
+ccf_result4 <- ccf(data4$Y1, data4$Y2, main = "CCF: Pattern 4 (Near Unit Root)")
+
+par(mfrow = c(1, 1))
+```
+
+# Stability and Eigenvalues
+
+The stability of a VAR model depends on the eigenvalues of the coefficient matrix.
+
+```{r stability}
+# Function to check stability
+check_stability <- function(phi_matrix, pattern_name) {
+  eigenvals <- eigen(phi_matrix)$values
+  moduli <- Mod(eigenvals)
+  max_modulus <- max(moduli)
+  
+  stable <- max_modulus < 1
+  
+  cat(paste("\n", pattern_name, ":\n"))
+  cat(paste("Eigenvalues:", paste(round(eigenvals, 3), collapse = ", "), "\n"))
+  cat(paste("Moduli:", paste(round(moduli, 3), collapse = ", "), "\n"))
+  cat(paste("Max modulus:", round(max_modulus, 3), "\n"))
+  cat(paste("Stable:", stable, "\n"))
+  
+  return(list(eigenvals = eigenvals, stable = stable))
+}
+
+# Check stability for all patterns
+stability1 <- check_stability(phi_matrix_1, "Pattern 1 (Positive Cross-lagged)")
+stability2 <- check_stability(phi_matrix_2, "Pattern 2 (Negative Cross-lagged)")  
+stability3 <- check_stability(phi_matrix_3, "Pattern 3 (Granger Causality)")
+stability4 <- check_stability(phi_matrix_4, "Pattern 4 (Near Unit Root)")
+```
+
+# Summary of VAR Model Patterns
+
+## Key Takeaways:
+
+1. **Positive Cross-Lagged Effects**: Variables reinforce each other, creating smooth co-movements and positive correlations.
+
+2. **Negative Cross-Lagged Effects**: Variables counteract each other, leading to oscillatory behavior and negative correlations.
+
+3. **Granger Causality**: Unidirectional influence where one variable systematically leads the other.
+
+4. **Near Unit Root Behavior**: High persistence creates trending behavior and long memory in the system.
+
+## Phase Plot Interpretations:
+
+- **Spiral patterns**: Indicate oscillatory dynamics
+- **Linear relationships**: Suggest strong contemporaneous correlation
+- **Scattered patterns**: Indicate weak relationships or high noise
+- **Expanding/contracting trajectories**: Related to system stability
+
+## Practical Applications:
+
+- **Economics**: GDP and inflation, interest rates and exchange rates
+- **Finance**: Stock prices and trading volumes, different asset returns
+- **Neuroscience**: Brain activity across different regions
+- **Marketing**: Advertising spend and sales across channels
+- **Climate**: Temperature and precipitation measurements
+
+The choice of VAR model specification should be based on economic theory, statistical testing (Granger causality tests, lag selection criteria), and diagnostic checking of residuals.

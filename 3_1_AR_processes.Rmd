@@ -1,0 +1,433 @@
+---
+title: "Analysis of AR(p) Processes:"
+output: html_document
+date: "2025-07-27"
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.height = 6, fig.width = 10)
+library(ggplot2)
+library(tsibble)
+library(feasts)
+library(patchwork)
+library(dplyr)
+library(stringr)
+library(tidyr)
+set.seed(123)
+```
+
+# Introduction to AR Processes
+
+Autoregressive (AR) processes are fundamental building blocks in time series analysis. An AR(p) process is defined as:
+
+$$Y_t = \phi_0 + \phi_1 Y_{t-1} + \phi_2 Y_{t-2} + \ldots + \phi_p Y_{t-p} + u_t$$
+
+where $u_t \sim WN(0, \sigma^2)$ (white noise).
+
+## Key Properties
+
+
+- **Stationarity**: Requires roots of characteristic equation outside unit circle
+
+- **Autocorrelation**: Exponential decay (AR(1)) or sinusoidal patterns (AR(2))
+
+- **Partial Autocorrelation**: Cuts off after lag p
+
+---
+
+# AR(1) Process Analysis
+
+## Mathematical Foundation
+
+An AR(1) process has the form:
+$$Y_t = \phi_0 + \phi_1 Y_{t-1} + u_t$$
+
+**Stationarity condition**: $|\phi_1| < 1$
+
+**Key properties**:
+
+
+- Mean: $\mathbb{E}[Y_t] = \frac{\phi_0}{1-\phi_1}$
+
+- Variance: $Var(Y_t) = \frac{\sigma^2}{1-\phi^2}$
+
+- Autocorrelation: $\rho(Y_t, Y_{s}) = \phi^{|t-s|}$
+
+## Simulation of Different AR(1) Processes
+
+```{r ar1_simulation}
+# Function to simulate AR(1) process
+simulate_ar1 <- function(n, phi, c = 0, sigma = 1) {
+  y <- numeric(n)
+  u <- rnorm(n, 0, sigma)
+  
+  # Starting value (unconditional mean)
+  y[1] <- c / (1 - phi) + u[1] / sqrt(1 - phi^2)
+  
+  for (t in 2:n) {
+    y[t] <- c + phi * y[t-1] + u[t]
+  }
+  
+  return(y)
+}
+
+# Simulate different AR(1) processes
+n <- 300
+ar1_data <- tibble(
+  time = rep(1:n, 4),
+  series = rep(c("phi_1 = 0.9 (Strong persistence)", 
+                 "phi_1 = 0.5 (Moderate persistence)", 
+                 "phi_1 = -0.7 (Oscillatory)",
+                 "phi_1 = 0.1 (Weak persistence)"), each = n),
+  phi = rep(c(0.9, 0.5, -0.7, 0.1), each = n),
+  y = c(simulate_ar1(n, 0.9), 
+        simulate_ar1(n, 0.5), 
+        simulate_ar1(n, -0.7), 
+        simulate_ar1(n, 0.1))
+) |>
+  as_tsibble(index = time, key = series)
+
+# Plot AR(1) processes
+p1 <- ar1_data |>
+  ggplot(aes(x = time, y = y, color = series)) +
+  geom_line(alpha = 0.8) +
+  facet_wrap(~series, scales = "free_y", ncol = 2) +
+  labs(title = "AR(1) Processes with Different phi_1 Values",
+       x = "Time", y = "Value") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  scale_color_viridis_d()
+
+print(p1)
+```
+
+## AR(1) Autocorrelation Functions
+
+```{r ar1_acf_pacf}
+# Calculate theoretical ACF for AR(1)
+calculate_ar1_acf <- function(phi, max_lag = 20) {
+  lags <- 0:max_lag
+  acf_values <- phi^lags
+  return(data.frame(lag = lags, acf = acf_values))
+}
+
+# Create ACF plots for different phi_1 values
+phi_values <- c(0.9, 0.5, -0.7, 0.1)
+acf_plots <- list()
+
+for (i in 1:length(phi_values)) {
+  phi <- phi_values[i]
+  theoretical_acf <- calculate_ar1_acf(phi)
+  
+  # Get sample data for this phi
+  sample_data <- ar1_data |> 
+    filter(phi == !!phi) |>
+    as_tsibble(index = time)
+  
+  # Sample ACF
+  sample_acf <- sample_data |> ACF(y, lag_max = 20)
+  
+  acf_plots[[i]] <- ggplot() +
+    geom_col(data = sample_acf, aes(x = lag, y = acf), 
+             fill = "steelblue", alpha = 0.7, width = 0.7) +
+    geom_line(data = theoretical_acf, aes(x = lag, y = acf), 
+              color = "red", linewidth = 1.2) +
+    geom_point(data = theoretical_acf, aes(x = lag, y = acf), 
+               color = "red", size = 2) +
+    labs(title = paste("phi_1 =", phi), 
+         x = "Lag", y = "ACF") +
+    theme_minimal() +
+    geom_hline(yintercept = 0, color = "black") +
+    ylim(-1, 1)
+}
+
+# Arrange ACF plots
+(acf_plots[[1]] + acf_plots[[2]]) / (acf_plots[[3]] + acf_plots[[4]]) +
+  plot_annotation(title = "AR(1) Autocorrelation Functions: Sample (bars) vs Theoretical (red line)")
+```
+
+## AR(1) PACF and Stationarity
+
+```{r ar1_pacf_stationarity}
+# PACF for AR(1) processes
+pacf_plots <- list()
+
+for (i in 1:length(phi_values)) {
+  phi <- phi_values[i]
+  sample_data <- ar1_data |> 
+    filter(phi == !!phi) |>
+    as_tsibble(index = time)
+  
+  pacf_plots[[i]] <- sample_data |> 
+    PACF(y, lag_max = 20) |>
+    autoplot() +
+    labs(title = paste("phi_1 =", phi)) +
+    theme_minimal()
+}
+
+# Arrange PACF plots
+(pacf_plots[[1]] + pacf_plots[[2]]) / (pacf_plots[[3]] + pacf_plots[[4]]) +
+  plot_annotation(title = "AR(1) Partial Autocorrelation Functions")
+
+# Stationarity visualization
+phi_range <- seq(-0.99, 0.99, by = 0.01)
+stationarity_data <- tibble(
+  phi = phi_range,
+  stationary = abs(phi) < 1,
+  variance = ifelse(abs(phi) < 1, 1 / (1 - phi^2), NA)
+)
+
+p_stationarity <- ggplot(stationarity_data, aes(x = phi, y = variance)) +
+  geom_line(color = "blue", linewidth = 1.2) +
+  geom_vline(xintercept = c(-1, 1), color = "red", linetype = "dashed") +
+  labs(title = "AR(1) Variance vs phi_1 Parameter",
+       subtitle = "Variance explodes as |phi_1| approaches 1",
+       x = "φ parameter", y = "Theoretical Variance") +
+  theme_minimal() +
+  ylim(0, 50)
+
+print(p_stationarity)
+```
+
+---
+
+# AR(2) Process Analysis
+
+## Mathematical Foundation
+
+An AR(2) process has the form:
+$$Y_t =  \phi_0 + \phi_1 Y_{t-1} + \phi_2 Y_{t-2} + u_t$$
+
+**Stationarity conditions**:
+- $\phi_1 + \phi_2 < 1$
+- $\phi_2 - \phi_1 < 1$  
+- $|\phi_2| < 1$
+
+**Characteristic equation**: $1 - \phi_1 z - \phi_2 z^2 = 0$
+
+## AR(2) Process Simulation
+
+```{r ar2_simulation}
+# Function to simulate AR(2) process
+simulate_ar2 <- function(n, phi1, phi2, c = 0, sigma = 1) {
+  y <- numeric(n)
+  u <- rnorm(n, 0, sigma)
+  
+  # Check stationarity
+  if (!((phi1 + phi2 < 1) && (phi2 - phi1 < 1) && (abs(phi2) < 1))) {
+    warning("Parameters may not satisfy stationarity conditions")
+  }
+  
+  # Starting values (simplified)
+  y[1] <- u[1]
+  y[2] <- u[2]
+  
+  for (t in 3:n) {
+    y[t] <- c + phi1 * y[t-1] + phi2 * y[t-2] + u[t]
+  }
+  
+  return(y)
+}
+
+# Different AR(2) configurations
+ar2_configs <- list(
+  list(phi1 = 0.7, phi2 = 0.2, name = "phi_1=0.7, phi_2=0.2 (Real roots)"),
+  list(phi1 = 0.5, phi2 = -0.3, name = "phi_1=0.5, phi_2=-0.3 (Real roots)"),
+  list(phi1 = 1.0, phi2 = -0.6, name = "phi_1=1.0, phi_2=-0.6 (Complex roots)"),
+  list(phi1 = 0.1, phi2 = 0.8, name = "phi_1=0.1, phi_2=0.8 (Complex roots)")
+)
+
+# Simulate AR(2) processes
+ar2_data <- tibble()
+for (i in 1:length(ar2_configs)) {
+  config <- ar2_configs[[i]]
+  y_sim <- simulate_ar2(n, config$phi1, config$phi2)
+  
+  temp_data <- tibble(
+    time = 1:n,
+    y = y_sim,
+    series = config$name,
+    phi1 = config$phi1,
+    phi2 = config$phi2
+  )
+  ar2_data <- bind_rows(ar2_data, temp_data)
+}
+
+ar2_data <- ar2_data |> as_tsibble(index = time, key = series)
+
+# Plot AR(2) processes
+p2 <- ar2_data |>
+  ggplot(aes(x = time, y = y, color = series)) +
+  geom_line(alpha = 0.8) +
+  facet_wrap(~series, scales = "free_y", ncol = 2) +
+  labs(title = "AR(2) Processes with Different Parameter Combinations",
+       x = "Time", y = "Value") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  scale_color_viridis_d()
+
+print(p2)
+```
+
+## AR(2) Roots and Behavior
+
+```{r ar2_roots}
+# Function to find characteristic roots
+find_ar2_roots <- function(phi1, phi2) {
+  # Characteristic equation: 1 - phi1*z - phi2*z^2 = 0
+  # Rearranged: phi2*z^2 + phi1*z - 1 = 0
+  discriminant <- phi1^2 + 4*phi2
+  
+  if (discriminant >= 0) {
+    # Real roots
+    root1 <- (-phi1 + sqrt(discriminant)) / (2*phi2)
+    root2 <- (-phi1 - sqrt(discriminant)) / (2*phi2)
+    return(list(root1 = root1, root2 = root2, type = "real", discriminant = discriminant))
+  } else {
+    # Complex roots
+    real_part <- -phi1 / (2*phi2)
+    imag_part <- sqrt(-discriminant) / (2*phi2)
+    modulus <- sqrt(real_part^2 + imag_part^2)
+    frequency <- atan2(imag_part, real_part) / (2*pi)
+    return(list(real_part = real_part, imag_part = imag_part, 
+                modulus = modulus, frequency = frequency, type = "complex", discriminant = discriminant))
+  }
+}
+
+# Analyze roots for each AR(2) configuration
+roots_analysis <- tibble()
+for (i in 1:length(ar2_configs)) {
+  config <- ar2_configs[[i]]
+  roots <- find_ar2_roots(config$phi1, config$phi2)
+  
+  roots_analysis <- bind_rows(roots_analysis, 
+    tibble(
+      series = config$name,
+      phi1 = config$phi1,
+      phi2 = config$phi2,
+      root_type = roots$type,
+      discriminant = roots$discriminant
+    ))
+}
+
+print("AR(2) Roots Analysis:")
+print(roots_analysis)
+```
+
+## AR(2) Autocorrelation Patterns
+
+```{r ar2_acf_patterns}
+# AR(2) ACF plots
+ar2_acf_plots <- list()
+series_names <- unique(ar2_data$series)
+
+for (i in 1:length(series_names)) {
+  series_name <- series_names[i]
+  sample_data <- ar2_data |> 
+    filter(series == !!series_name) |>
+    as_tsibble(index = time)
+  
+  ar2_acf_plots[[i]] <- sample_data |> 
+    ACF(y, lag_max = 20) |>
+    autoplot() +
+    labs(title = str_wrap(series_name, 25)) +
+    theme_minimal() +
+    theme(plot.title = element_text(size = 9))
+}
+
+# Arrange ACF plots
+(ar2_acf_plots[[1]] + ar2_acf_plots[[2]]) / (ar2_acf_plots[[3]] + ar2_acf_plots[[4]]) +
+  plot_annotation(title = "AR(2) Autocorrelation Functions")
+
+# AR(2) PACF plots
+ar2_pacf_plots <- list()
+
+for (i in 1:length(series_names)) {
+  series_name <- series_names[i]
+  sample_data <- ar2_data |> 
+    filter(series == !!series_name) |>
+    as_tsibble(index = time)
+  
+  ar2_pacf_plots[[i]] <- sample_data |> 
+    PACF(y, lag_max = 20) |>
+    autoplot() +
+    labs(title = str_wrap(series_name, 25)) +
+    theme_minimal() +
+    theme(plot.title = element_text(size = 9))
+}
+
+# Arrange PACF plots
+(ar2_pacf_plots[[1]] + ar2_pacf_plots[[2]]) / (ar2_pacf_plots[[3]] + ar2_pacf_plots[[4]]) +
+  plot_annotation(title = "AR(2) Partial Autocorrelation Functions")
+```
+
+## AR(2) Stationarity Region
+
+```{r ar2_stationarity_region}
+# Create stationarity triangle for AR(2)
+phi1_range <- seq(-2, 2, by = 0.05)
+phi2_range <- seq(-1, 1, by = 0.05)
+
+stationarity_grid <- expand_grid(phi1 = phi1_range, phi2 = phi2_range) |>
+  mutate(
+    condition1 = phi1 + phi2 < 1,
+    condition2 = phi2 - phi1 < 1,
+    condition3 = abs(phi2) < 1,
+    stationary = condition1 & condition2 & condition3
+  )
+
+# Add our simulated points
+sim_points <- tibble(
+  phi1 = c(0.7, 0.5, 1.0, 0.1),
+  phi2 = c(0.2, -0.3, -0.6, 0.8),
+  series = c("Config 1", "Config 2", "Config 3", "Config 4")
+)
+
+p_stationarity_region <- ggplot(stationarity_grid, aes(x = phi1, y = phi2)) +
+  geom_raster(aes(fill = stationary), alpha = 0.7) +
+  geom_point(data = sim_points, aes(color = series), size = 4) +
+  scale_fill_manual(values = c("FALSE" = "red", "TRUE" = "lightblue"),
+                    name = "Stationary", labels = c("No", "Yes")) +
+  scale_color_viridis_d(name = "Our Simulations") +
+  labs(title = "AR(2) Stationarity Region",
+       subtitle = "Blue = Stationary, Red = Non-stationary",
+       x = "φ₁", y = "φ₂") +
+  theme_minimal() +
+  coord_cartesian(xlim = c(-2, 2), ylim = c(-1, 1))
+
+print(p_stationarity_region)
+```
+
+
+
+```{r summary_statistics}
+# Summary statistics for all simulated processes
+summary_stats <- bind_rows(
+  ar1_data |> 
+    group_by(series) |>
+    summarise(
+      mean = mean(y),
+      variance = var(y),
+      min = min(y),
+      max = max(y),
+      .groups = "drop"
+    ) |>
+    mutate(process_type = "AR(1)"),
+  
+  ar2_data |>
+    group_by(series) |>
+    summarise(
+      mean = mean(y),
+      variance = var(y),
+      min = min(y),
+      max = max(y),
+      .groups = "drop"
+    ) |>
+    mutate(process_type = "AR(2)")
+)
+
+print("Summary Statistics for All Simulated AR Processes:")
+print(summary_stats)
+```
+

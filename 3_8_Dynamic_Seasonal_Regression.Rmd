@@ -1,0 +1,150 @@
+
+---
+title: "Dynamic regression models"
+output: html_document
+date: "2025-08-21"
+---
+
+
+```{r setup, include=FALSE}
+library(fpp3)
+library(readr)
+
+vic_elec_daily <- vic_elec |>
+  filter(year(Time) == 2014) |>
+  index_by(Date = date(Time)) |>
+  summarise(
+    Demand = sum(Demand) / 1e3,
+    Temperature = max(Temperature),
+    Holiday = any(Holiday)
+  ) |>
+  mutate(Day_Type = case_when(
+    Holiday ~ "Holiday",
+    wday(Date) %in% 2:6 ~ "Weekday",
+    TRUE ~ "Weekend"
+  ))
+```
+
+
+## Dynamic harmonic regression
+\fontsize{14}{15}\sf
+
+\textbf{Combine Fourier terms with ARIMA errors}
+
+### Advantages
+   * it allows any length seasonality;
+   * for data with more than one seasonal period, you can include Fourier terms of different frequencies;
+   * the seasonal pattern is smooth for small values of $K$ (but more wiggly seasonality can be handled by increasing $K$);
+   * the short-term dynamics are easily handled with a simple ARMA error.
+
+### Disadvantages
+ * seasonality is assumed to be fixed
+
+## Eating-out expenditure
+
+```{r cafe, echo=TRUE, fig.height=2.6}
+aus_cafe <- aus_retail |>
+  filter(Industry == "Cafes, restaurants and takeaway food services",
+         year(Month) %in% 2004:2018) |>
+  summarise(Turnover = sum(Turnover))
+aus_cafe |> autoplot(Turnover)
+```
+
+Again we see an increase as the series progresses, and we use the log of the series to counter this.
+
+## Eating-out expenditure
+
+\fontsize{10}{10.5}\sf
+
+```{r cafefit, dependson='cafe', echo=TRUE, results='hide'}
+fit <- aus_cafe |> model(
+  `K = 1` = ARIMA(log(Turnover) ~ fourier(K = 1) + PDQ(0, 0, 0)),
+  `K = 2` = ARIMA(log(Turnover) ~ fourier(K = 2) + PDQ(0, 0, 0)),
+  `K = 3` = ARIMA(log(Turnover) ~ fourier(K = 3) + PDQ(0, 0, 0)),
+  `K = 4` = ARIMA(log(Turnover) ~ fourier(K = 4) + PDQ(0, 0, 0)),
+  `K = 5` = ARIMA(log(Turnover) ~ fourier(K = 5) + PDQ(0, 0, 0)),
+  `K = 6` = ARIMA(log(Turnover) ~ fourier(K = 6) + PDQ(0, 0, 0)))
+glance(fit)
+```
+We consider all possible fourier specifications, up to $K=6$. Interestingly, the lowest AICc is given by $K=6$.
+
+
+```{r, echo = FALSE}
+glance(fit) |>
+  select(.model, sigma2, log_lik, AIC, AICc, BIC) |>
+  knitr::kable()
+```
+
+## Eating-out expenditure
+
+```{r, echo=FALSE}
+cafe_plot <- function(...) {
+  fit |>
+    select(...) |>
+    forecast() |>
+    autoplot(aus_cafe) +
+    labs(title = sprintf("Log transformed %s, fourier(K = %s)", model_sum(select(fit, ...)[[1]][[1]]), deparse(..1))) +
+    geom_label(
+      aes(x = yearmonth("2007 Jan"), y = 4250, label = paste0("AICc = ", format(AICc))),
+      data = glance(select(fit, ...))
+    ) +
+    geom_line(aes(y = .fitted), colour = "red", augment(select(fit, ...))) +
+    ylim(c(1500, 5100))
+}
+```
+
+```{r cafe1, dependson='cafe', fig.height=4, echo=FALSE}
+cafe_plot(K = 1)
+```
+
+## Eating-out expenditure
+
+```{r cafe2, dependson='cafe', fig.height=4, echo=FALSE}
+cafe_plot(K = 2)
+```
+Notice that the ARIMA term gets simpler for larger values of $K$!
+
+## Eating-out expenditure
+
+```{r cafe3, dependson='cafe', fig.height=4, echo=FALSE}
+cafe_plot(K = 3)
+```
+
+## Eating-out expenditure
+
+```{r cafe4, dependson='cafe', fig.height=4, echo=FALSE}
+cafe_plot(K = 4)
+```
+
+## Eating-out expenditure
+
+```{r cafe5, dependson='cafe', fig.height=4, echo=FALSE}
+cafe_plot(K = 5)
+```
+
+## Eating-out expenditure
+
+```{r cafe6, dependson='cafe', fig.height=4, echo=FALSE}
+cafe_plot(K = 6)
+```
+Note that here we have montly data, which can in fact easily be handled by a Seasonal ARIMA model. We now look at an example where Fourier terms help a lot: An example with \textbf{weekly data} with non-integer seasonality.
+
+
+## Example: weekly gasoline products
+\fontsize{8}{8}\sf
+
+After some trying around we set $K=6$:
+```{r gasmodel, echo=TRUE, cache=FALSE}
+fit <- us_gasoline |>
+  model(K06 = ARIMA(Barrels ~ fourier(K = 6) + PDQ(0, 0, 0)))
+report(fit)
+```
+
+## Example: weekly gasoline products
+
+```{r gasf, echo=TRUE, fig.height=3.2}
+forecast(fit, h = "3 years") |>
+  autoplot(us_gasoline)
+```
+
+We have quite large prediction intervals, as there is a lot of noise in this dataset, but overall the prediction appears to make sense, which is quite impressive for a 3 year forecast of weekly data.

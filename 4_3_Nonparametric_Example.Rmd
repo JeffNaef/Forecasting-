@@ -1,0 +1,133 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-08-21"
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+# Load required libraries
+library(ggplot2)
+library(dCovTS)
+library(forecast)
+library(dplyr)
+library(gridExtra)
+library(seasonal)
+library(astsa)
+library(fpp3)
+
+# Set seed for reproducibility
+set.seed(1)
+```
+
+## R Markdown
+
+
+
+```{r cars}
+fit <- us_change |>
+  model(
+    aicc = VAR(vars(Consumption, Income)),
+    bic = VAR(vars(Consumption, Income), ic = "bic")
+  )
+glance(fit)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+fit |>
+  augment() |>
+  ACF(.innov) |>
+  autoplot()
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+```{r}
+fit |>
+  select(aicc) |>
+  forecast() |>
+  autoplot(us_change |> filter(year(Quarter) > 2010))
+```
+
+
+## Test: Fit and Predict DRF on data
+
+```{r}
+library(drf)
+source("drfown.R")
+n<-length(us_change$Consumption)
+
+Yall<-as.matrix(us_change[,c("Consumption", "Income")])
+
+## Step 1: Plot autocorrelation function:
+dCovTS::mADCFplot(Yall)
+
+## Thoughts: We don't really have residuals! (except in the Hilbert space),
+## so how do we use the ACF? What we really need is 
+## t \indep Y_t \mid X_t #-> Ask Davide about this!!
+
+# lag 1
+X<-as.matrix(Yall[1:(n-1),])
+Y<-as.matrix(Yall[2:n,])
+
+
+fit<-drfown(X=X, Y=Y)
+
+B<-100
+
+p<-ncol(Yall)
+
+Ypred<-list() ##list of length H+1, each element contains B replicate of the h prediction step
+Ypred[[1]]<-matrix(Yall[n,],nrow=B, ncol=p, byrow = T) ## each element of Ypred contains 
+
+colnames(Ypred[[1]])<-colnames(Yall)
+
+##Predict a path
+  
+  for (h in 2:(H+1)){
+    # start from last (h-1) prediction in the same "world" b 
+    DRFw <- predict(fit, newdata =Ypred[[h-1]] )$weights
+    ## Draw path
+    sig<-abs(n^(-1/5)/drf:::medianHeuristic(Y))
+    
+    Ypred[[h]]<-t(apply(DRFw,1, function(w){
+    mean<-Y[sample(1:nrow(Y), size=1, replace = T, w),]
+    return(mvrnorm(n=1, mu = mean, Sigma = sig^2 * diag(p)))
+    }
+    ))
+    
+  }
+  
+
+### Continue here!!!
+
+
+
+
+point_forecasts <- rowMeans(Ypred[2:(H+1),]) #pred_matrix[, "Point Forecast"]
+lower_80 <- apply(Ypred[2:(H+1),], 1, quantile, probs = 0.1 )  #pred_matrix[, "Lo 80"]
+upper_80 <- apply(Ypred[2:(H+1),], 1, quantile, probs = 0.9 ) #pred_matrix[, "Hi 80"]
+lower_95 <- apply(Ypred[2:(H+1),], 1, quantile, probs = 0.025 ) #pred_matrix[, "Lo 95"]
+upper_95 <- apply(Ypred[2:(H+1),], 1, quantile, probs = 0.975 )
+
+# Create a manual forecast object
+manual_forecast <- structure(
+  list(
+    mean = ts(point_forecasts, start=n+1, end=n+H),
+    lower = cbind(lower_80, lower_95),
+    upper = cbind(upper_80, upper_95),
+    level = c(80, 95),
+    x = ts(google_2018$Close)  # your original data
+  ),
+  class = "forecast"
+)
+
+# Plot it
+autoplot(manual_forecast) +
+  labs(title = "DRF(1) Forecast", 
+       y = "Close Price", 
+       x = "Time")

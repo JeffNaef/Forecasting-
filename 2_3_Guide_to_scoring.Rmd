@@ -1,0 +1,302 @@
+---
+title: "A Guide to Proper Scoring"
+output: html_document
+date: "2025-07-09"
+---
+
+
+## Introduction
+
+When evaluating machine learning models, the choice of evaluation metric can significantly impact which model appears "best." This document demonstrates why different scoring metrics are appropriate for different types of predictions and how proper scoring rules help us make better choices.
+
+## Setup and Data Generation
+
+```{r setup, message=FALSE, warning=FALSE}
+library(dplyr)
+library(scoringutils)
+library(scoringRules)
+
+# Set seed for reproducibility
+set.seed(42)
+```
+
+Let's create a synthetic dataset that mimics real-world wage prediction scenarios:
+
+```{r data-generation}
+# Create synthetic wage data for 5000 individuals
+n <- 5000
+
+# Generate age between 20 and 60
+age <- round(runif(n, min = 20, max = 60))
+
+# Define education levels and their probabilities
+education_levels <- c("High School", "Bachelor's", "Master's")
+education_probs <- c(0.4, 0.4, 0.2)
+education <- sample(education_levels, n, replace = TRUE, prob = education_probs)
+
+# Simulate experience correlated with age (with some noise)
+experience <- age - 20 + round(rnorm(n, mean = 0, sd = 3))
+
+# Generate wages using a non-linear function
+wage <- exp((age * 0.1) + 
+            (case_when(education == "High School" ~ 1,
+                       education == "Bachelor's" ~ 1.5,
+                       TRUE ~ 2)) + 
+            (experience * 0.05) + 
+            rnorm(n, mean = 0, sd = 0.5))
+
+# Visualize the wage distribution
+hist(wage, main = "Distribution of Wages in Training Data", 
+     xlab = "Wage", col = "lightblue", breaks = 30)
+```
+
+## Example: Predicting Dave's Wage
+
+Let's examine predictions for a specific individual - Dave:
+
+```{r dave-example}
+# Dave's characteristics
+ageDave <- 30
+educationDave <- "Bachelor's"
+experienceDave <- 10
+
+# Generate Dave's wage distribution (what we're trying to predict)
+wageDave <- exp((ageDave * 0.1) + 
+                (case_when(educationDave == "High School" ~ 1,
+                           educationDave == "Bachelor's" ~ 1.5,
+                           TRUE ~ 2)) + 
+                (experienceDave * 0.05) + 
+                rnorm(n, mean = 0, sd = 0.5))
+
+hist(wageDave, main = "Wage Distribution for Dave", 
+     xlab = "Wage", col = "lightgreen", breaks = 30)
+```
+
+## Test Set Generation
+
+```{r test-set}
+# Generate test set of 1000 individuals
+ntest <- 1000
+
+agetest <- round(runif(ntest, min = 20, max = 60))
+educationtest <- sample(education_levels, ntest, replace = TRUE, prob = education_probs)
+experiencetest <- agetest - 20 + round(rnorm(ntest, mean = 0, sd = 3))
+
+# True wages for test set (what we're trying to predict)
+wagetest <- exp((agetest * 0.1) + 
+                (case_when(educationtest == "High School" ~ 1,
+                           educationtest == "Bachelor's" ~ 1.5,
+                           TRUE ~ 2)) + 
+                (experiencetest * 0.05) + 
+                rnorm(ntest, mean = 0, sd = 0.5))
+
+# Create test data frame
+Xtest <- data.frame(age = agetest, education = educationtest, experience = experiencetest)
+```
+
+## Point Predictions: Mean vs Median
+
+### Defining Our Estimators
+
+```{r point-estimators}
+# Function to estimate conditional mean
+conditionalmeanest <- function(age, education, experience, N = 1000) {
+  mean(exp((age * 0.1) + 
+           (case_when(education == "High School" ~ 1,
+                      education == "Bachelor's" ~ 1.5,
+                      TRUE ~ 2)) + 
+           (experience * 0.05) + 
+           rnorm(N, mean = 0, sd = 0.5)))
+}
+
+# Function to estimate conditional median
+conditionalmedianest <- function(age, education, experience, N = 1000) {
+  median(exp((age * 0.1) + 
+             (case_when(education == "High School" ~ 1,
+                        education == "Bachelor's" ~ 1.5,
+                        TRUE ~ 2)) + 
+             (experience * 0.05) + 
+             rnorm(N, mean = 0, sd = 0.5)))
+}
+```
+
+### Visualizing Mean vs Median for Dave
+
+```{r dave-visualization}
+# Calculate mean and median estimates for Dave
+dave_mean <- conditionalmeanest(ageDave, educationDave, experienceDave)
+dave_median <- conditionalmedianest(ageDave, educationDave, experienceDave)
+
+# Plot Dave's wage distribution with mean and median
+hist(wageDave, main = "Dave's Wage Distribution with Mean and Median Estimates", 
+     xlab = "Wage", col = "lightgreen", breaks = 30)
+abline(v = dave_mean, col = "darkred", lwd = 2, lty = 2)
+abline(v = dave_median, col = "darkblue", lwd = 2, lty = 2)
+legend("topright", legend = c("Mean Estimate", "Median Estimate"), 
+       col = c("darkred", "darkblue"), lwd = 2, lty = 2)
+```
+
+### Comparing MSE and MAE
+
+```{r point-comparison}
+# Generate predictions for test set
+meanest <- sapply(1:nrow(Xtest), function(j) 
+  conditionalmeanest(Xtest$age[j], Xtest$education[j], Xtest$experience[j]))
+
+medianest <- sapply(1:nrow(Xtest), function(j) 
+  conditionalmedianest(Xtest$age[j], Xtest$education[j], Xtest$experience[j]))
+
+# Calculate Mean Squared Error (MSE)
+MSE1 <- mean((meanest - wagetest)^2)
+MSE2 <- mean((medianest - wagetest)^2)
+
+# Calculate Mean Absolute Error (MAE)
+MAE1 <- mean(abs(meanest - wagetest))
+MAE2 <- mean(abs(medianest - wagetest))
+
+# Results
+cat("MSE Results:\n")
+cat("Mean Estimator MSE:", round(MSE1, 2), "\n")
+cat("Median Estimator MSE:", round(MSE2, 2), "\n")
+cat("Mean estimator is better for MSE:", MSE1 < MSE2, "\n\n")
+
+cat("MAE Results:\n")
+cat("Mean Estimator MAE:", round(MAE1, 2), "\n")
+cat("Median Estimator MAE:", round(MAE2, 2), "\n")
+cat("Median estimator is better for MAE:", MAE2 < MAE1, "\n")
+```
+
+**Key Insight**: The mean estimator minimizes MSE, while the median estimator minimizes MAE. This demonstrates why the choice of metric matters!
+
+## Interval Predictions: Quantile Scoring
+
+### Defining Quantile Estimators
+
+```{r quantile-estimators}
+# Function to estimate conditional quantiles
+conditionalquantileest <- function(probs, age, education, experience, N = 1000) {
+  quantile(exp((age * 0.1) + 
+               (case_when(education == "High School" ~ 1,
+                          education == "Bachelor's" ~ 1.5,
+                          TRUE ~ 2)) + 
+               (experience * 0.05) + 
+               rnorm(N, mean = 0, sd = 0.5)), 
+           probs = probs)
+}
+
+# Naive estimator bounds
+lowernaive <- 0
+uppernaive <- max(wage)
+
+# Confidence level
+alpha <- 0.05  # 95% confidence interval
+```
+
+### Calculating Interval Scores
+
+```{r interval-scoring}
+# Calculate proper quantile estimates
+lower <- sapply(1:nrow(Xtest), function(j)
+  conditionalquantileest(alpha/2, Xtest$age[j], Xtest$education[j], Xtest$experience[j]))
+
+upper <- sapply(1:nrow(Xtest), function(j)
+  conditionalquantileest(1 - alpha/2, Xtest$age[j], Xtest$education[j], Xtest$experience[j]))
+
+# Calculate quantile scores
+qs_lower <- mean(quantile_score(wagetest, predicted = as.matrix(lower), quantile_level = alpha/2))
+qs_upper <- mean(quantile_score(wagetest, predicted = as.matrix(upper), quantile_level = 1 - alpha/2))
+
+# Calculate quantile scores for naive estimator
+qs_lowernaive <- mean(quantile_score(wagetest, predicted = as.matrix(rep(lowernaive, ntest)), quantile_level = alpha/2))
+qs_uppernaive <- mean(quantile_score(wagetest, predicted = as.matrix(rep(uppernaive, ntest)), quantile_level = 1 - alpha/2))
+
+# Calculate interval scores
+interval_score <- (qs_lower + qs_upper) / 2
+interval_scorenaive <- (qs_lowernaive + qs_uppernaive) / 2
+
+cat("Interval Scoring Results:\n")
+cat("Proper Estimator Score:", round(interval_score, 2), "\n")
+cat("Naive Estimator Score:", round(interval_scorenaive, 2), "\n")
+cat("Improvement ratio:", round(interval_scorenaive / interval_score, 2), "x better\n")
+```
+
+## Distributional Predictions: Energy Score
+
+### Defining Distribution Estimators
+
+```{r distribution-estimators}
+# Proper distribution estimator: samples from true conditional distribution
+distributionestimate <- function(age, education, experience, N = 100) {
+  exp((age * 0.1) + 
+      (case_when(education == "High School" ~ 1,
+                 education == "Bachelor's" ~ 1.5,
+                 TRUE ~ 2)) + 
+      (experience * 0.05) + 
+      rnorm(N, mean = 0, sd = 0.5))
+}
+
+# Naive distribution estimator: ignores individual characteristics
+distributionestimatenaive <- function(age, education, experience, N = 100) {
+  exp(rnorm(N, mean = 0, sd = 0.5))
+}
+```
+
+### Calculating Energy Scores
+
+```{r energy-scoring}
+# Calculate energy scores for proper estimator
+scoretrue <- mean(sapply(1:nrow(Xtest), function(j) {
+  wageest <- distributionestimate(Xtest$age[j], Xtest$education[j], Xtest$experience[j])
+  return(scoringRules::es_sample(y = wagetest[j], dat = matrix(wageest, nrow = 1)))
+}))
+
+# Calculate energy scores for naive estimator
+scorenaive <- mean(sapply(1:nrow(Xtest), function(j) {
+  wageest <- distributionestimatenaive(Xtest$age[j], Xtest$education[j], Xtest$experience[j])
+  return(scoringRules::es_sample(y = wagetest[j], dat = matrix(wageest, nrow = 1)))
+}))
+
+cat("Energy Score Results:\n")
+cat("Proper Distribution Estimator:", round(scoretrue, 2), "\n")
+cat("Naive Distribution Estimator:", round(scorenaive, 2), "\n")
+cat("Improvement ratio:", round(scorenaive / scoretrue, 2), "x better\n")
+```
+
+## Summary of Results
+
+```{r results-summary}
+# Create a summary table
+results_summary <- data.frame(
+  Metric = c("MSE", "MAE", "Interval Score", "Energy Score"),
+  `Best Estimator` = c("Mean", "Median", "Proper Quantiles", "Proper Distribution"),
+  `Proper Score` = c(round(MSE1, 2), round(MAE2, 2), round(interval_score, 2), round(scoretrue, 2)),
+  `Naive Score` = c(round(MSE2, 2), round(MAE1, 2), round(interval_scorenaive, 2), round(scorenaive, 2)),
+  `Improvement` = c(paste0(round(MSE2/MSE1, 2), "x"), 
+                    paste0(round(MAE1/MAE2, 2), "x"),
+                    paste0(round(interval_scorenaive/interval_score, 2), "x"),
+                    paste0(round(scorenaive/scoretrue, 2), "x")),
+  check.names = FALSE
+)
+
+print(results_summary)
+```
+
+## Key Takeaways
+
+1. **Proper Scoring Rules**: Different metrics are "proper" for different types of predictions:
+   - **MSE** is proper for mean predictions
+   - **MAE** is proper for median predictions
+   - **Quantile Score** is proper for quantile predictions
+   - **Energy Score** is proper for distributional predictions
+
+2. **Metric Choice Matters**: The "best" model depends entirely on your evaluation metric. A model that excels at MSE might perform poorly on MAE.
+
+3. **Match Your Metric to Your Goal**: 
+   - Use MSE when you care about mean predictions
+   - Use MAE when you care about median predictions
+   - Use interval scores for uncertainty quantification
+   - Use energy scores for full distributional predictions
+
+4. **Avoid Metric Misalignment**: Don't optimize for one metric while evaluating with another, as this can lead to suboptimal model selection.
+
+This framework helps ensure that your model evaluation aligns with your actual prediction goals, leading to better model selection and deployment decisions.

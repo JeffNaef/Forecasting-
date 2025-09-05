@@ -1,0 +1,57 @@
+---
+title: "VAR in FABLE"
+output: html_document
+date: "2025-08-21"
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+# Load required libraries
+library(ggplot2)
+library(dCovTS)
+library(forecast)
+library(dplyr)
+library(gridExtra)
+library(seasonal)
+library(astsa)
+library(fpp3)
+
+# Set seed for reproducibility
+set.seed(1)
+```
+
+## US consumption
+
+We fit a VAR model to the us_change data of the Fable package.
+
+There are two decisions one has to make when using a VAR to forecast, namely \textbf{how many variables} (n) and \textbf{how many lags} (p) should be included in the system. 
+The number of coefficients to be estimated in a VAR is equal to  $n^2 p + n(n-1)/2$. This grows linearly in $p$ but very quickly in $n$ and the more coefficients that need to be estimated, the larger the estimation error entering the forecast.
+
+In practice, it is usual to keep $n$ small and include only variables that are correlated with each other, and therefore useful in forecasting each other. Information criteria are commonly used to select the number of lags to be included. Care should be taken when using the AICc as it tends to choose large numbers of lags; instead, for VAR models, we often use the BIC instead. A more sophisticated version of the model is a “sparse VAR” (where many coefficients are set to zero); another approach is to use “shrinkage estimation” (where coefficients are smaller).
+
+
+```{r cars}
+fit <- us_change |>
+  model(
+    aicc = VAR(vars(Consumption, Income)),
+    bic = VAR(vars(Consumption, Income), ic = "bic")
+  )
+glance(fit)
+```
+
+A VAR(5) model is selected using the AICc (the default), while a VAR(1) model is selected using the BIC. This is not unusual — the BIC will always select a model that has fewer parameters than the AICc model as it imposes a stronger penalty for the number of parameters. 
+
+```{r pressure, echo=FALSE}
+fit |>
+  augment() |>
+  ACF(.innov) |>
+  autoplot()
+```
+However, in this case, we see that the residuals from the VAR(1) model (chosen by BIC) have significant autocorrelation for Consumption, while the VAR(5) model has effectively captured all the information in the data. The VAR(5) model generates the following forecast:
+
+```{r}
+fit |>
+  select(aicc) |>
+  forecast() |>
+  autoplot(us_change |> filter(year(Quarter) > 2010))
+```
+

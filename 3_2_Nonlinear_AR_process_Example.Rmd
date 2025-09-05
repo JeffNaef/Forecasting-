@@ -1,0 +1,189 @@
+---
+title: "Nonlinear Generalizations of AR models: ARCH(1)"
+output: html_document
+date: "2025-08-04"
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(ggplot2)
+library(gridExtra)
+library(patchwork)
+library(dCovTS)
+library(doSNOW)
+library(fpp3)
+set.seed(123)
+```
+
+## Introduction to ARCH(1) Process
+
+The ARCH(1) (Autoregressive Conditional Heteroskedasticity) model is
+used to model time series data where the variance of the error term is
+not constant over time.
+
+The ARCH(1) is usually written as $$
+    Y_t=\mu + \epsilon_t,
+    $$ where $$ 
+        \epsilon_t=\sigma_t \varepsilon_t, \  \sigma_t^2=\varphi_0 + \varphi_1 \epsilon_t^2, \ \varepsilon_t \sim N(0,1),
+      $$ with $\varphi_0 > 0$ and $\varphi_1 \geq 0$ for stationarity. This allows for a time varying conditional variance of $$
+        Var(Y_t \mid \mathbf{Y}_{t-1})=v(\mathbf{Y}_{t-1}, \boldsymbol{\phi})^2=\varphi_0 + \varphi_1 (Y_{t-1} - \phi_0)^2,
+        $$ contrary to the AR(p) model.
+
+## Simulating an ARCH(1) Process
+
+```{r simulation}
+# Parameters for ARCH(1) model
+n <- 1000          # Number of observations
+mu <- 0           # Conditional mean
+varphi0 <- 0.1     # Constant term in variance equation
+varphi1 <- 0.8     # ARCH coefficient
+
+# Initialize vectors
+y <- numeric(n)
+sigma2 <- numeric(n)
+epsilon <- numeric(n)
+
+# Set initial values
+sigma2[1] <- varphi0 / (1 - varphi1)  # Unconditional variance
+epsilon[1] <- rnorm(1, 0, sqrt(sigma2[1]))
+y[1] <- mu + epsilon[1]
+
+# Generate ARCH(1) process
+for (t in 2:n) {
+  sigma2[t] <- varphi0 + varphi1 * epsilon[t-1]^2
+  epsilon[t] <- rnorm(1, 0, sqrt(sigma2[t]))
+  y[t] <- mu + epsilon[t]
+}
+
+# # Create data frame for plotting
+# arch_data <- data.frame(
+#   time = 1:n,
+#   y = y,
+#   sigma = sqrt(sigma2),
+#   sigma2 = sigma2
+# )
+
+
+arch_data <- tsibble(
+  time = 1:n,
+  y = y,
+  sigma = sqrt(sigma2),
+  sigma2 = sigma2,
+  index = time
+)
+
+
+
+print(paste("Unconditional variance:", round(var(y), 4)))
+print(paste("Theoretical unconditional variance:", round(varphi0/(1-varphi1), 4)))
+```
+
+## Visualizing the ARCH(1) Process
+
+```{r plots, fig.height=10, fig.width=12}
+# Plot 1: Time series
+p1 <- ggplot(arch_data, aes(x = time, y = y)) +
+  geom_line(color = "steelblue", alpha = 0.8) +
+  labs(title = "ARCH(1) Time Series", 
+       x = "Time", y = "Value") +
+  theme_minimal()
+
+
+p2<-arch_data |>
+  ACF(y) |>
+  autoplot()+
+  labs(title = "ACF of y")
+
+
+p3<-arch_data |>
+  ACF(y^2) |>
+  autoplot() +
+  labs(title = "ACF of y^2")
+
+
+
+ACDFdata<-invisible(arch_data |>
+  pull(y) |>
+  ADCFplot())
+  #ADCFplot() 
+
+# Create ADCF plot as ggplot object
+adcf_df <- data.frame(
+  lag = 0:(length(ACDFdata$ADCF)-1),
+  adcf = c(ACDFdata$ADCF)
+)
+
+p4 <- ggplot(adcf_df, aes(x = lag, y = adcf)) +
+  geom_col(fill = "orange", alpha = 0.7) +
+  geom_hline(yintercept = 0, color = "black") +
+  geom_hline(yintercept = c(ACDFdata$critical.values), 
+             color = "red", linetype = "dashed") +
+  labs(title = "ADCF Plot", 
+       x = "Lag", y = "ADCF") +
+  theme_minimal() +
+  ylim(-0.5, 1)
+
+
+
+#plot_grid(p1, p2, p3, p4, ncol = 2)
+
+# Arrange plots
+(p1 + p2) / (p3 + p4)
+```
+
+The ARCH process in the first plot (upper left) shows clear signs of the volatility clustering that is often observed in finance data -- periods of high and low volatility cluster together, because the value of the variance at time $t$ influences the one at $t+1$. Plotting the ACF (upper right) we actually do not observe a significant autocorrelation (the ones that we do see are by accident), since
+\begin{align*}
+Cov(Y_t, Y_{t-1})&=\mathbb{E}[Y_t Y_{t-1}] - \varphi_0^2\\
+&=\mathbb{E}[ \mathbb{E}[Y_t\mid Y_{t-1}]  Y_{t-1}] - \varphi_0^2\\
+&=\varphi_0^2 - \varphi_0^2\\
+&=0.
+\end{align*}
+Similarly, $Cov(Y_t, Y_{t-h})=0$ for all $h > 1$.
+However it turns out there is autocorrelation between $Y_{t}^2$ and $Y_{t-1}^2$, which is plotted in the third plot (below left). Finally, the ADCF plot also correctly picks up upon the dependence between $Y_t$, $Y_{t-h}$, though it wrongly also 
+
+## Key Properties of ARCH(1) Process
+
+### 1. Volatility Clustering
+
+```{r volatility_clustering}
+# Identify periods of high and low volatility
+high_vol_periods <- which(sqrt(sigma2) > quantile(sqrt(sigma2), 0.8))
+cat("High volatility periods tend to cluster together.\n")
+cat("Example high volatility periods:", head(high_vol_periods, 10), "\n")
+```
+
+### 2. Unconditional vs Conditional Moments
+
+```{r moments}
+# Theoretical moments
+theoretical_var <- varphi0 / (1 - varphi1)
+theoretical_kurtosis <- 3 * (1 - varphi1^2) / (1 - varphi1^2 - 2*varphi1^2)
+
+# Sample moments
+sample_var <- var(y)
+sample_kurtosis <- moments::kurtosis(y)
+
+cat("Theoretical unconditional variance:", round(theoretical_var, 4), "\n")
+cat("Sample variance:", round(sample_var, 4), "\n")
+cat("Sample kurtosis:", round(sample_kurtosis, 4), "\n")
+cat("Normal kurtosis:", 3, "\n")
+```
+
+## Summary
+
+This ARCH(1) process demonstrates several key features:
+
+1.  **Volatility Clustering**: Periods of high volatility tend to be
+    followed by periods of high volatility
+2.  **Heavy Tails**: The distribution exhibits excess kurtosis compared
+    to normal distribution
+3.  **Heteroskedasticity**: The conditional variance changes over time
+4.  **Autocorrelation in Squared Residuals**: While the series itself
+    may not be autocorrelated, the squared residuals show significant
+    autocorrelation
+
+The ARCH(1) model is fundamental in financial econometrics for modeling
+time-varying volatility in asset returns.

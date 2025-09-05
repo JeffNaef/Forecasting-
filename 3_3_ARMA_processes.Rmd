@@ -1,0 +1,190 @@
+---
+title: "Analysis of ARMA(p,q) Processes"
+output: html_document
+date: "2025-08-07"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Load required libraries
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+library(forecast)
+library(fpp3)
+# Set seed for reproducibility
+set.seed(456)
+```
+
+
+
+# Introduction to ARMA(p,q) Processes
+
+ARMA(p,q) processes combine both Autoregressive (AR) and Moving Average (MA) components:
+
+$$Y_t = \phi_1 Y_{t-1} + \phi_2 Y_{t-2} + ... + \phi_p Y_{t-p} + \epsilon_t + \theta_1 \epsilon_{t-1} + ... + \theta_q \epsilon_{t-q}$$
+
+Or in compact form: $\Phi(L)Y_t = \Theta(L)\epsilon_t$
+
+**Key advantages of ARMA models:**
+
+-**Parsimony**: Can model complex patterns with fewer parameters than pure AR or MA
+
+-**Flexibility**: Combines persistence (AR) with shock effects (MA)
+
+-**Identification**: ACF and PACF patterns help determine appropriate orders
+
+```{r}
+
+# Simulation parameters
+n_obs <- 400
+time_points <- 1:n_obs
+```
+
+## ARMA(1,1) Process
+
+The simplest mixed model: $Y_t = \phi_1 Y_{t-1} + \epsilon_t + \theta_1 \epsilon_{t-1}$
+
+**Properties:**
+- Combines AR(1) persistence with MA(1) shock smoothing
+- Always stationary if $|\phi_1| < 1$ (AR condition)
+- Invertible if $|\theta_1| < 1$ (MA condition)
+
+```{r arma11_simulation}
+# Different ARMA(1,1) parameter combinations
+arma11_params <- list(
+  list(ar = 0.7, ma = 0.3, label = "phi_1=0.7, theta_1=0.3 (Persistent + Smooth)"),
+  list(ar = 0.5, ma = -0.4, label = "phi_1=0.5, theta_1=-0.4 (Persistent + Volatile)"),
+  list(ar = -0.4, ma = 0.6, label = "phi_1=-0.4, theta_1=0.6 (Alternating + Smooth)"),
+  list(ar = 0.3, ma = 0.8, label = "phi_1=0.3, theta_1=0.8 (Weak AR + Strong MA)")
+)
+
+arma11_data <- data.frame()
+
+for (params in arma11_params) {
+  # Using arima.sim for accurate ARMA simulation
+  series <- as.numeric(arima.sim(n = n_obs, 
+                                list(ar = params$ar, ma = params$ma),
+                                sd = 1))
+  temp_df <- data.frame(
+    time = time_points,
+    value = series,
+    params = params$label,
+    process = "ARMA(1,1)"
+  )
+  arma11_data <- rbind(arma11_data, temp_df)
+}
+
+# Plot ARMA(1,1) processes
+p1 <- ggplot(arma11_data, aes(x = time, y = value)) +
+  geom_line(color = "purple", alpha = 0.8) +
+  facet_wrap(~params, scales = "free_y", ncol = 2) +
+  labs(title = "ARMA(1,1) Processes with Different Parameter Combinations",
+       subtitle = "Notice how AR and MA components interact",
+       x = "Time", y = "Value") +
+  theme_minimal() +
+  theme(strip.text = element_text(size = 12))
+
+print(p1)
+```
+
+## ACF/PACF Patterns: The Key to ARMA Identification
+
+ARMA processes have characteristic ACF and PACF patterns:
+- **ACF**: Decays gradually (mix of exponential and oscillatory)
+- **PACF**: Decays gradually (opposite of pure AR or MA)
+
+```{r arma_identification}
+# Generate examples for identification
+set.seed(789)
+
+# ARMA(1,1)
+arma11 <- arima.sim(n = n_obs, list(ar = 0.6, ma = 0.4))
+# ARMA(2,1) 
+arma21 <- arima.sim(n = n_obs, list(ar = c(0.5, 0.3), ma = 0.4))
+# ARMA(1,2)
+arma12 <- arima.sim(n = n_obs, list(ar = 0.5, ma = c(0.4, 0.3)))
+
+# Plot ACF and PACF
+par(mfrow = c(3, 3))
+
+# ARMA(1,1)
+plot(arma11, main = "ARMA(1,1): phi_1=0.6, theta_1=0.4", col = "purple")
+acf(arma11, main = "ACF: ARMA(1,1)", lag.max = 15)
+pacf(arma11, main = "PACF: ARMA(1,1)", lag.max = 15)
+
+# ARMA(2,1)
+plot(arma21, main = "ARMA(2,1): phi_1=0.5, φ₂=0.3, theta_1=0.4", col = "darkgreen")
+acf(arma21, main = "ACF: ARMA(2,1)", lag.max = 15)
+pacf(arma21, main = "PACF: ARMA(2,1)", lag.max = 15)
+
+# ARMA(1,2)
+plot(arma12, main = "ARMA(1,2): phi_1=0.5, theta_1=0.4, θ₂=0.3", col = "darkred")
+acf(arma12, main = "ACF: ARMA(1,2)", lag.max = 15)
+pacf(arma12, main = "PACF: ARMA(1,2)", lag.max = 15)
+
+par(mfrow = c(1, 1))
+```
+
+## Comparison: AR vs MA vs ARMA
+
+Let's compare how different model types capture the same underlying pattern:
+
+```{r model_comparison}
+# Generate a complex ARMA(2,1) process
+set.seed(123)
+complex_series <- arima.sim(n = 300, list(ar = c(0.5, 0.3), ma = 0.4))
+
+# Fit different model types
+ar_model <- arima(complex_series, order = c(5, 0, 0))  # High-order AR
+ma_model <- arima(complex_series, order = c(0, 0, 5))  # High-order MA
+arma_model <- arima(complex_series, order = c(2, 0, 1)) # True model
+
+# Compare AIC
+comparison <- data.frame(
+  Model = c("AR(5)", "MA(5)", "ARMA(2,1)"),
+  AIC = c(AIC(ar_model), AIC(ma_model), AIC(arma_model)),
+  Parameters = c(5, 5, 3)
+)
+
+print("Model Comparison:")
+print(comparison)
+
+# Plot fitted values
+fitted_data <- data.frame(
+  time = 1:300,
+  observed = as.numeric(complex_series),
+  ar_fitted = as.numeric(fitted(ar_model)),
+  ma_fitted = as.numeric(fitted(ma_model)),
+  arma_fitted = as.numeric(fitted(arma_model))
+)
+
+fitted_long <- reshape2::melt(fitted_data, id.vars = c("time", "observed"))
+
+p_comparison <- ggplot(fitted_long) +
+  geom_line(aes(x = time, y = observed), color = "black", alpha = 0.6) +
+  geom_line(aes(x = time, y = value, color = variable), alpha = 0.8) +
+  facet_wrap(~variable, ncol = 1, 
+             labeller = labeller(variable = c("ar_fitted" = "AR(5) Fit",
+                                             "ma_fitted" = "MA(5) Fit", 
+                                             "arma_fitted" = "ARMA(2,1) Fit"))) +
+  labs(title = "Model Comparison: Fitting Complex ARMA(2,1) Process",
+       subtitle = "Black line = True process, Colored line = Model fit",
+       x = "Time", y = "Value") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+print(p_comparison)
+```
+
+## Key Takeaways
+
+### **ARMA Model Advantages:**
+
+1. **Parsimony**: ARMA(2,1) captures complex patterns with 3 parameters vs AR(5) or MA(5) with 5 parameters
+
+2. **Interpretability**: 
+   - AR terms capture **persistence** and **momentum**
+   - MA terms capture **shock effects** and **error correction**
+
+3. **Forecasting**: Combines both autoregressive prediction and moving average smoothing

@@ -1,0 +1,151 @@
+---
+title: "SARIMA in FABLE"
+output: html_document
+date: "2025-08-12"
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.height = 6, fig.width = 10)
+library(ggplot2)
+library(tsibble)
+library(gridExtra)
+library(patchwork)
+library(dCovTS)
+library(doSNOW)
+library(fpp3)
+```
+
+## Seasonal ARIMA models
+
+| ARIMA | $~\underbrace{(p, d, q)}$ | $\underbrace{(P, D, Q)_{s}}$ |
+| ----: | :-----------------------: | :--------------------------: |
+|       | ${\uparrow}$              | ${\uparrow}$                 |
+|       | Non-seasonal part         | Seasonal part of             |
+|       | of the model              | of the model                 |
+
+where $s =$ number of observations per year.
+
+
+## Seasonal ARIMA models
+The seasonal part of an AR or MA model will be seen in the seasonal lags of
+the PACF and ACF.
+
+\textbf{ARIMA(0,0,0)(0,0,1)$_{12}$ will show:}
+
+  * a spike at lag 12 in the ACF but no other significant spikes.
+  * The PACF will show exponential decay in the seasonal lags; that is, at lags 12, 24, 36, \dots.
+
+\textbf{ARIMA(0,0,0)(1,0,0)$_{12}$ will show:}
+
+  * exponential decay in the seasonal lags of the ACF
+  * a single significant spike at lag 12 in the PACF.
+
+## How does ARIMA() work for seasonal models?
+
+\textbf{A seasonal ARIMA process}
+\[
+\Phi_P^s(L)\Phi_p(L)(1-L)^d (1-L^s)^D Y_t = \Theta_Q^s(L)\theta_q(L)\varepsilon_t
+\]
+Need to select appropriate orders: \alert{$d,D,p,q,P,Q$}, and whether to include the intercept $\phi_0$.
+
+\textbf{Hyndman and Khandakar (JSS, 2008) algorithm:}
+
+  * Select no.\ differences \alert{$d$} via KPSS test and \alert{$D$} using seasonal strength.
+  * Select \alert{$p,q,P,Q$} and \alert{$c$} by minimising AICc.
+  * Use stepwise search to traverse model space.
+
+## US leisure employment
+
+```{r, fig.height=2.45}
+leisure <- us_employment |>
+  filter(Title == "Leisure and Hospitality", year(Month) > 2000) |>
+  mutate(Employed = Employed / 1000) |>
+  select(Month, Employed)
+autoplot(leisure, Employed) +
+  labs(title = "US employment: leisure & hospitality", y = "People (millions)")
+```
+We see strong seasonal effects that appear to be roughly constant and a trend. We thus first try to take seasonal differences (D=1):
+
+## US leisure employment
+
+```{r, fig.height=3}
+leisure |>
+  gg_tsdisplay(difference(Employed, 12), plot_type = "partial", lag = 36) +
+  labs(title = "Seasonally differenced", y = "")
+```
+The resulting series still appears to be nonstationary, with slowly decreasing acf. We thus consider a further (non-seasonal) differencing (d=1):
+
+## US leisure employment
+
+```{r, fig.height=2.8}
+leisure |>
+  gg_tsdisplay(difference(Employed, 12) |> difference(),
+    plot_type = "partial", lag = 36) +
+  labs(title = "Double differenced", y = "")
+```
+
+We spot significant non seasonal lags for both the acf and pacf, indicating that a non-seasonal AR(2) or a non-seasonal MA(2) might be appropriate. Moreover, the significant pacf at lag 12 may indicate the need for a seasonal MA(1). We try the two different model specifications as well as the automatic choice of the ARIMA function:
+
+## US leisure employment
+\fontsize{10}{11}\sf
+
+```{r}
+fit <- leisure |>
+  model(arima012011 = ARIMA(Employed ~ pdq(0, 1, 2) + PDQ(0, 1, 1)),
+        arima210011 = ARIMA(Employed ~ pdq(2, 1, 0) + PDQ(0, 1, 1)),
+        auto = ARIMA(Employed, stepwise = FALSE, approx = FALSE))
+fit |>
+  pivot_longer(everything(),
+    names_to = "Model name",
+    values_to = "Orders")
+```
+
+Let us consider the AICc/BIC values of the models:
+
+## US leisure employment
+\fontsize{10}{11}\sf
+
+```{r}
+glance(fit) |>
+  arrange(AICc) |>
+  select(.model:BIC)
+```
+Clearly the automatically chosen model displays the smallest value in AIC(c) and BIC. We thus study the residuals of this model:
+
+
+## US leisure employment
+
+```{r}
+fit |>
+  select(auto) |>
+  gg_tsresiduals(lag = 36)
+```
+
+Despite one significant lag in the acf (which can happen due to randomness), the assumption of the residuals being white noise appears reasonable. To test this further, we consider the distance autocorrelation function:
+
+## US leisure employment
+\fontsize{10}{11}\sf
+
+```{r}
+#augment(fit) |>
+#  filter(.model == "auto") |>
+#  features(.innov, ljung_box, lag = 24, dof = 4)
+
+
+augment(fit) |>
+  filter(.model == "auto") |>
+  pull(.resid) |>
+  ADCFplot()
+
+
+```
+We note that the distance autocorrelation rejects $H_0$ of independence between residuals, indicating that further modelling might be possible. On the other hand, it is not clear how the siginificant value at lag 11 should or could be addressed. Thus we will choose this model for our analysis.
+
+
+## US leisure employment
+
+```{r}
+forecast(fit, h = 36) |>
+  filter(.model == "auto") |>
+  autoplot(leisure) +
+  labs(title = "US employment: leisure & hospitality", y = "People (millions)")
+```

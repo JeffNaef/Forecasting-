@@ -1,0 +1,375 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-08-06"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(tsibble)
+library(feasts)
+library(patchwork)
+library(dplyr)
+library(stringr)
+library(tidyr)
+set.seed(123)
+```
+
+
+
+# Introduction to Moving Average (MA) Processes
+
+Moving Average (MA) processes are fundamental time series models where the current value depends on current and past error terms. An MA(q) process is defined as:
+
+$$Y_t = \epsilon_t + \theta_1 \epsilon_{t-1} + \theta_2 \epsilon_{t-2} + ... + \theta_q \epsilon_{t-q}$$
+
+where $\epsilon_t$ is white noise with $\epsilon_t \sim WN(0, \sigma^2)$ and $\theta_i$ are the moving average parameters.
+
+Key properties of MA processes:
+
+- **Always stationary** (unlike AR processes)
+
+- **Finite memory** - only depends on q past shocks
+
+- **Invertible** when roots of characteristic polynomial lie outside unit circle
+
+```{r}
+
+
+# Function to simulate MA process
+simulate_ma <- function(n, theta, sigma = 1) {
+  q <- length(theta)
+  
+  # Generate white noise (we need n + q terms)
+  epsilon <- rnorm(n + q, 0, sigma)
+  
+  # Initialize MA process
+  Y <- numeric(n)
+  
+  # Generate MA process
+  for (t in 1:n) {
+    Y[t] <- epsilon[t + q]  # Current shock
+    for (j in 1:q) {
+      Y[t] <- Y[t] + theta[j] * epsilon[t + q - j]  # Past shocks
+    }
+  }
+  
+  return(Y)
+}
+
+# Simulation parameters
+n_obs <- 500
+time_points <- 1:n_obs
+```
+
+## MA(1) Process
+
+An MA(1) process follows: $Y_t = \epsilon_t + \theta_1 \epsilon_{t-1}$
+
+**Key properties:**
+
+- Mean: $E[Y_t] = 0$
+- Variance: $Var(Y_t) = \sigma^2(1 + \theta_1^2)$
+- Autocovariance: $\gamma(1) = \theta_1\sigma^2$, $\gamma(k) = 0$ for $k > 1$
+- **Finite memory**: only current and previous shock matter
+
+```{r ma1_simulation}
+# Different MA(1) parameters
+theta1_values <- c(0.3, 0.7, -0.5, -0.9)
+ma1_data <- data.frame()
+
+for (theta in theta1_values) {
+  series <- simulate_ma(n_obs, theta)
+  temp_df <- data.frame(
+    time = time_points,
+    value = series,
+    theta = paste("theta_1 =", theta),
+    process = "MA(1)"
+  )
+  ma1_data <- rbind(ma1_data, temp_df)
+}
+
+# Plot MA(1) processes
+p1 <- ggplot(ma1_data, aes(x = time, y = value)) +
+  geom_line(color = "darkblue", alpha = 0.8) +
+  facet_wrap(~theta, scales = "free_y", ncol = 2) +
+  labs(title = "MA(1) Processes with Different Parameters",
+       subtitle = "Notice how negative theta_1 creates more erratic patterns",
+       x = "Time", y = "Value") +
+  theme_minimal() +
+  theme(strip.text = element_text(size = 12))
+
+print(p1)
+```
+
+**Key observations for MA(1):**
+- Positive theta_1: Creates smoother series (shocks reinforce each other)
+- Negative theta_1: Creates more volatile series (shocks cancel each other)
+- All MA(1) processes are stationary regardless of theta_1 value
+- Memory is limited to just one period
+
+## Theoretical vs Empirical Properties of MA(1)
+
+Let's verify the theoretical properties with our simulations:
+
+```{r ma1_properties}
+# Function to compute sample autocovariances
+compute_sample_acf <- function(x, max_lag = 10) {
+  n <- length(x)
+  x_centered <- x - mean(x)
+  
+  autocov <- numeric(max_lag + 1)
+  for (lag in 0:max_lag) {
+    if (lag == 0) {
+      autocov[lag + 1] <- sum(x_centered^2) / n
+    } else {
+      autocov[lag + 1] <- sum(x_centered[1:(n-lag)] * x_centered[(lag+1):n]) / n
+    }
+  }
+  return(autocov)
+}
+
+# Theoretical autocovariances for MA(1)
+ma1_theoretical_autocov <- function(lag, theta1, sigma = 1) {
+  if (lag == 0) {
+    return(sigma^2 * (1 + theta1^2))
+  } else if (lag == 1) {
+    return(sigma^2 * theta1)
+  } else {
+    return(0)
+  }
+}
+
+# Compare theoretical vs empirical for theta_1 = 0.7
+theta1 <- 0.7
+ma1_series <- simulate_ma(1000, theta1)
+empirical_autocov <- compute_sample_acf(ma1_series, 5)
+
+comparison_data <- data.frame(
+  lag = 0:5,
+  empirical = empirical_autocov,
+  theoretical = sapply(0:5, function(k) ma1_theoretical_autocov(k, theta1))
+)
+
+print("MA(1) Autocovariance Comparison (theta_1 = 0.7):")
+print(round(comparison_data, 3))
+
+# Plot comparison
+comparison_long <- reshape2::melt(comparison_data, id.vars = "lag")
+
+p_comparison <- ggplot(comparison_long, aes(x = lag, y = value, color = variable, shape = variable)) +
+  geom_line(size = 1) +
+  geom_point(size = 3) +
+  labs(title = "MA(1): Theoretical vs Empirical Autocovariances",
+       subtitle = "theta_1 = 0.7, Notice zero autocovariance for lags > 1",
+       x = "Lag", y = "Autocovariance", color = "Type", shape = "Type") +
+  theme_minimal()
+
+print(p_comparison)
+```
+
+## MA(2) Process
+
+An MA(2) process follows: $Y_t = \epsilon_t + \theta_1 \epsilon_{t-1} + \theta_2 \epsilon_{t-2}$
+
+**Key properties:**
+- Mean: $E[Y_t] = 0$
+- Variance: $Var(Y_t) = \sigma^2(1 + \theta_1^2 + \theta_2^2)$
+- Autocovariance: $\gamma(1) = \sigma^2(\theta_1 + \theta_1\theta_2)$, $\gamma(2) = \sigma^2\theta_2$, $\gamma(k) = 0$ for $k > 2$
+- **Finite memory**: depends on current shock and two previous shocks
+
+```{r ma2_simulation}
+# MA(2) parameters - various combinations
+ma2_params <- list(
+  list(theta = c(0.5, 0.3), label = "theta_1=0.5, theta_2=0.3"),
+  list(theta = c(0.8, -0.4), label = "theta_1=0.8, theta_2=-0.4"),
+  list(theta = c(-0.6, 0.2), label = "theta_1=-0.6, theta_2=0.2"),
+  list(theta = c(-0.3, -0.5), label = "theta_1=-0.3, theta_2=-0.5")
+)
+
+ma2_data <- data.frame()
+
+for (params in ma2_params) {
+  series <- simulate_ma(n_obs, params$theta)
+  temp_df <- data.frame(
+    time = time_points,
+    value = series,
+    params = params$label,
+    process = "MA(2)"
+  )
+  ma2_data <- rbind(ma2_data, temp_df)
+}
+
+# Plot MA(2) processes
+p2 <- ggplot(ma2_data, aes(x = time, y = value)) +
+  geom_line(color = "darkred", alpha = 0.8) +
+  facet_wrap(~params, scales = "free_y", ncol = 2) +
+  labs(title = "MA(2) Processes with Different Parameter Combinations",
+       subtitle = "More complex patterns due to interaction of two MA parameters",
+       x = "Time", y = "Value") +
+  theme_minimal() +
+  theme(strip.text = element_text(size = 10))
+
+print(p2)
+```
+
+## Invertibility Condition for MA Processes
+
+MA processes are **invertible** when they can be written as an infinite AR process. This requires the roots of the characteristic polynomial to lie outside the unit circle.
+
+For MA(1): $1 + \theta_1 z = 0 \Rightarrow$ invertible if $|\theta_1| < 1$
+For MA(2): $1 + \theta_1 z + \theta_2 z^2 = 0 \Rightarrow$ more complex conditions
+
+```{r invertibility_demonstration}
+# Demonstrate invertibility concept with MA(1)
+# Compare invertible vs non-invertible MA(1)
+
+set.seed(456)
+n_demo <- 200
+
+# Invertible MA(1): |theta_1| < 1
+inv_series <- simulate_ma(n_demo, 0.8)
+
+# Non-invertible MA(1): |theta_1| > 1  
+noninv_series <- simulate_ma(n_demo, 1.2)
+
+invertibility_data <- data.frame(
+  time = rep(1:n_demo, 2),
+  value = c(inv_series, noninv_series),
+  invertible = rep(c("Invertible (theta_1 = 0.8)", "Non-invertible (theta_1 = 1.2)"), each = n_demo)
+)
+
+p_inv <- ggplot(invertibility_data, aes(x = time, y = value, color = invertible)) +
+  geom_line(alpha = 0.8) +
+  facet_wrap(~invertible, scales = "free_y", ncol = 1) +
+  labs(title = "Invertibility in MA(1) Processes",
+       subtitle = "Non-invertible processes can show more extreme behavior",
+       x = "Time", y = "Value") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+print(p_inv)
+
+cat("Variance comparison:\n")
+cat("Invertible MA(1):", round(var(inv_series), 3), "\n")
+cat("Non-invertible MA(1):", round(var(noninv_series), 3), "\n")
+```
+
+## Autocorrelation Analysis: MA vs AR Comparison
+
+One key difference between MA and AR processes is their autocorrelation structure:
+- **MA(q)**: ACF cuts off after lag q, PACF decays gradually
+- **AR(p)**: ACF decays gradually, PACF cuts off after lag p
+
+```{r acf_analysis}
+# Compare ACF patterns
+par(mfrow = c(2, 4))
+
+# MA(1) with θ = 0.7
+ma1_series <- simulate_ma(n_obs, 0.7)
+acf(ma1_series, main = "ACF: MA(1), theta_1=0.7", lag.max = 15)
+pacf(ma1_series, main = "PACF: MA(1), theta_1=0.7", lag.max = 15)
+
+# MA(2) 
+ma2_series <- simulate_ma(n_obs, c(0.5, 0.3))
+acf(ma2_series, main = "ACF: MA(2)", lag.max = 15)
+pacf(ma2_series, main = "PACF: MA(2)", lag.max = 15)
+
+# For comparison: AR(1) and AR(2)
+ar1_series <- simulate_ma(n_obs, 0.7) # We'll simulate this differently
+ar1_actual <- arima.sim(n = n_obs, list(ar = 0.7))
+ar2_actual <- arima.sim(n = n_obs, list(ar = c(0.5, 0.3)))
+
+acf(ar1_actual, main = "ACF: AR(1), φ₁=0.7", lag.max = 15)
+pacf(ar1_actual, main = "PACF: AR(1), φ₁=0.7", lag.max = 15)
+
+acf(ar2_actual, main = "ACF: AR(2)", lag.max = 15)
+pacf(ar2_actual, main = "PACF: AR(2)", lag.max = 15)
+
+par(mfrow = c(1, 1))
+```
+
+## MA Process Characteristics Summary
+
+```{r ma_characteristics}
+# Create summary comparison
+set.seed(789)
+n_short <- 200
+
+# Generate different process types
+ma1_pos <- simulate_ma(n_short, 0.8)
+ma1_neg <- simulate_ma(n_short, -0.8)
+ma2_mixed <- simulate_ma(n_short, c(0.6, -0.4))
+
+comparison_data <- data.frame(
+  time = rep(1:n_short, 3),
+  value = c(ma1_pos, ma1_neg, ma2_mixed),
+  process = rep(c("MA(1): theta_1 = 0.8", "MA(1): theta_1 = -0.8", "MA(2): theta_1 = 0.6, theta_2 = -0.4"), 
+                each = n_short)
+)
+
+p_summary <- ggplot(comparison_data, aes(x = time, y = value, color = process)) +
+  geom_line(size = 0.8) +
+  facet_wrap(~process, scales = "free_y", ncol = 1) +
+  scale_color_manual(values = c("darkblue", "navy", "darkred")) +
+  labs(title = "Comparison of Different MA Processes",
+       x = "Time", y = "Value") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        strip.text = element_text(size = 12))
+
+print(p_summary)
+
+# Calculate and display key statistics
+cat("\n=== MA PROCESS STATISTICS ===\n")
+
+processes <- list(
+  "MA(1), theta_1=0.8" = ma1_pos,
+  "MA(1), theta_1=-0.8" = ma1_neg, 
+  "MA(2), theta_1=0.6, theta_2=-0.4" = ma2_mixed
+)
+
+for (name in names(processes)) {
+  series <- processes[[name]]
+  cat(sprintf("%s:\n", name))
+  cat(sprintf("  Mean: %.4f\n", mean(series)))
+  cat(sprintf("  Variance: %.4f\n", var(series)))
+  cat(sprintf("  Lag-1 Autocorr: %.4f\n", cor(series[-1], series[-length(series)])))
+  cat("\n")
+}
+```
+
+## Key Insights and Practical Applications
+
+### Theoretical Properties Verified:
+
+1. **Stationarity**: All MA processes are stationary by construction
+2. **Finite Memory**: MA(q) processes have autocorrelations that are exactly zero for lags > q
+3. **Parameter Effects**: 
+   - Positive θ parameters create smoother series
+   - Negative θ parameters create more volatile, oscillating patterns
+
+### Identification Rules:
+
+- **MA(1)**: ACF has one significant lag, then cuts to zero
+- **MA(2)**: ACF has two significant lags, then cuts to zero
+- **PACF**: Decays gradually for MA processes (opposite of AR)
+
+### Practical Applications:
+
+MA processes are particularly useful for modeling:
+- **Forecast errors** in econometric models
+- **Seasonal adjustments** in time series
+- **Noise filtering** in signal processing
+- **Short-term dependencies** in financial returns
+
+The finite memory property makes MA models excellent for capturing temporary shocks that affect a system for only a limited time period, unlike AR models which can have persistent effects.
+
+### Model Selection:
+
+Use MA models when:
+- The autocorrelation function cuts off sharply after q lags
+- You want to model temporary effects of shocks
+- The underlying process has a natural "memory length"
+- Forecast errors show moving average patterns

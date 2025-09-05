@@ -1,0 +1,881 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-07-31"
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  cache = TRUE,
+  dev.args = list(pointsize = 11)
+)
+
+options(
+  digits = 3,
+  width = 75,
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis",
+  ggplot2.discrete.colour = c("#D55E00", "#0072B2", "#009E73", "#CC79A7", "#E69F00", "#56B4E9", "#F0E442"),
+  ggplot2.discrete.fill = c("#D55E00", "#0072B2", "#009E73", "#CC79A7", "#E69F00", "#56B4E9", "#F0E442")
+)
+
+library(fpp3)
+
+```
+
+## Graphics
+
+\fontsize{16}{18}\sf
+
+- Plots allow us to identify:
+   - Patterns;
+   - Unusual observations;
+   - Changes over time;
+   - Relationships between variables.
+
+# 1. Time plots
+\fontsize{10}{10}\sf
+
+```{r}
+#Create the univariate time series we are interested in:
+
+PBS |>
+  filter(ATC2 == "A10") |>
+  select(Month, Concession, Type, Cost) |>
+  summarise(TotalC = sum(Cost)) |>
+  mutate(Cost = TotalC / 1e6) -> a10
+
+#Plot 
+a10 |>
+  autoplot(Cost) + 
+  labs(y = "$ (millions)", title = "Australian antidiabetic drug sales")
+
+```
+
+The variable/time series TotalC was automatically used for plotting. Note that autoplot is the same as the following ggplot command:
+
+```{r}
+a10 |>
+  ggplot(aes(x=Month, y=Cost)) +
+  geom_line()
+```
+
+Sometimes it is also helpful to plot additional points:
+
+```{r}
+#Plot 
+a10 |>
+  autoplot(Cost) + 
+  geom_point()
+```
+The plot clearly indicates that there are regular spikes at some month each year. These spikes are then followed by a downturn. There also seems to be a nonlinear trend where the cost is increasing over time. Moreover, the difference between spike and downturn increases over time! This is in fact a typical \emph{multiplicative} pattern
+
+
+## Ansett airlines
+\fontsize{10}{10}\sf
+
+```{r}
+ansett |>
+  autoplot(Passengers)
+```
+
+
+\fontsize{10}{10}\sf
+
+```{r}
+# Under plot Economy class in 10 routes
+ansett |>
+  filter(Class == "Economy") |>
+  autoplot(Passengers)
+```
+
+
+\fontsize{10}{10}\sf
+
+```{r}
+# Only look at one route
+ansett |>
+  filter(Airports == "MEL-SYD") |>
+  autoplot(Passengers)
+```
+Note the zeros in all three time series! These were strikes. Also there is an interesting period where some of the Economy class was replaced by business class, so that one goes down the other goes up.
+
+\fontsize{10}{10}\sf
+
+```{r echo=FALSE, fig.height=3.8}
+ansett |>
+  filter(Airports == "MEL-SYD", Class == "Economy") |>
+  mutate(Passengers = Passengers/1000) |> 
+  autoplot(Passengers) +
+  labs(title = "Ansett airlines economy class", subtitle = "Melbourne-Sydney", 
+       y = "Passengers ('000)")
+```
+
+\only<2->{\begin{textblock}{.75}(2.15,3.7)
+\begin{alertblock}{}\fontsize{10}{10}\sf Index\phantom{dg}\end{alertblock}
+\end{textblock}}
+\only<3->{\begin{textblock}{1.6}(3.28,3.7)
+\begin{alertblock}{}\fontsize{10}{10}\sf Key\phantom{dg}\end{alertblock}
+\end{textblock}}
+\only<4>{\begin{textblock}{6.7}(5.5,3.7)
+\begin{alertblock}{}\fontsize{10}{10}\sf Measured variables\phantom{dg}\end{alertblock}
+\end{textblock}}
+
+
+
+
+
+
+
+# 2. Time series patterns
+
+\textbf{Trend}
+  : pattern exists when there is a long-term increase or decrease in the data.
+
+\textbf{Seasonal}
+  : pattern exists when a series is influenced by seasonal factors (e.g., the quarter of the year, the month, or day of the week). Big Example: Spikes of sales during Christmas.
+
+\textbf{Cyclic}
+  : pattern exists when data exhibit rises and falls that are \emph{not of fixed period} (duration usually of at least 2 years, e.g. business cycle).
+
+## Time series components
+
+\textbf{Differences between seasonal and cyclic patterns:}
+
+* seasonal pattern constant length; cyclic pattern variable length
+* average length of cycle longer than length of seasonal pattern
+* magnitude of cycle more variable than magnitude of seasonal pattern
+
+  
+
+
+\fontsize{9}{9}\sf
+
+```{r}
+aus_production |>
+  filter(year(Quarter) >= 1980) |>
+  autoplot(Electricity) +
+  labs(y = "GWh", title = "Australian electricity production")
+```
+Clearly there is a long term increase (i.e. trend). There is a clear seasonal component with regular peaks every 4 observations.
+
+Note that it would not have been necessary to check the plot for this, these features are pretty obvious for electricity data (expert knowledge)
+
+\fontsize{9}{9}\sf
+
+```{r, warning=FALSE}
+aus_production |>
+  autoplot(Bricks) +
+  labs(y = "million units", title = "Australian clay brick production")
+```
+For the first half, there is a strong increasing trend in brick production. Then there are two big busts/recessions. There is also a clear cyclical component.
+
+
+\fontsize{9}{9}\sf
+
+```{r}
+us_employment |>
+  filter(Title == "Retail Trade", year(Month) >= 1980) |>
+  autoplot(Employed / 1e3) +
+  labs(y = "Million people", title = "Retail employment, USA")
+```
+Strong seasonal patterns plus trend. There is however also a cyclical component with strong increases and cycles of slowdowns.
+
+\fontsize{9}{9}\sf
+
+```{r}
+gafa_stock |>
+  filter(Symbol == "AMZN", year(Date) >= 2018) |>
+  autoplot(Close) +
+  labs(y = "$US", title = "Amazon closing stock price")
+```
+This is financial data, which is generally somewhat special, we will treat this in later contexts (e.g. random walks).
+
+\fontsize{9}{9}\sf
+
+```{r}
+pelt |>
+  autoplot(Lynx) +
+  labs(y = "Number trapped", title = "Annual Canadian Lynx Trappings")
+```
+There is a clear cycle here (over several years), which corresponds to the lifecycle of the Lynx.
+
+
+## Seasonal or cyclic?
+
+\textbf{Differences between seasonal and cyclic patterns:}
+
+  * seasonal pattern constant length; cyclic pattern variable length
+  * average length of cycle longer than length of seasonal pattern
+  * magnitude of cycle more variable than magnitude of seasonal pattern
+
+
+\textbf{The timing of peaks and troughs is predictable with seasonal data, but unpredictable in the long term with cyclic data.}
+
+# 3. Seasonal Plots 
+
+```{r}
+PBS |>
+  filter(ATC2 == "A10") |>
+  select(Month, Concession, Type, Cost) |>
+  summarise(TotalC = sum(Cost)) |>
+  mutate(Cost = TotalC / 1e6) -> a10
+```
+
+## Reminder: a10 time plot
+
+\fontsize{10}{10}\sf
+
+```{r, echo=TRUE,fig.height=3}
+a10 |> 
+  autoplot(Cost)
+```
+
+The plot clearly indicates that there are regular spikes at some month each year. These spikes are then followed by a downturn. There also seems to be a nonlinear trend where the cost is increasing over time. Moreover, the difference between spike and downturn increases over time! This is in fact a typical \emph{multiplicative} pattern.
+
+## Seasonal plots
+
+```{r, echo=TRUE, dependson="a10", fig.height=3.3}
+a10 |> gg_season(Cost, labels = "both") +
+  labs(y = "$ million", title = "Seasonal plot: antidiabetic drug sales")
+```
+Now the data is plotted per year agains the month (Season=Month here). We can clearly see an increase from year to year. Moroever, we see the spike from before in January and a drop in February.
+
+\textbf{Seasonal Plots}
+
+  * Data plotted against the individual "seasons" in which the data were observed.  (In this case a "season" is a month.)
+  * Something like a time plot except that the data from each season are overlapped.
+  * Enables the underlying seasonal pattern to be seen more clearly, and also allows any substantial departures from the seasonal pattern to be easily identified.
+  * In R: `gg_season()`
+
+## Quarterly Australian Beer Production
+
+```{r fig.height=2.8}
+beer <- aus_production |> 
+   select(Quarter, Beer) |> filter(year(Quarter) >= 1992)
+beer |> autoplot(Beer) + 
+  labs(title = "Australian beer production", y = "Megalitres") 
+```
+Again we see highly seasonal data (production increases at the beginning of summer). However its hard to identify from this plot in which quarter the spike actually happens.
+
+\fontsize{9}{9}\sf
+
+```{r, fig.height=3}
+beer |> autoplot(Beer) + geom_point() + 
+  labs(title = "Australian beer production", y = "Megalitres") 
+```
+
+
+
+
+```{r}
+beer |> gg_season(Beer, labels = "right")
+```
+Now in this plot, we can clearly see the spike happening in Q4! There also seems to be a certain downward trend, though 2004 appears to be an outlier! (Ask for expert knowledge here if possible)
+
+
+## Multiple seasonal periods
+\fontsize{9}{9}\sf
+
+```{r}
+vic_elec
+```
+Here we have a dummy variable that signals if we have a holiday or not!
+
+\fontsize{9}{9}\sf
+
+```{r}
+vic_elec |> autoplot()
+```
+
+
+
+
+```{r, dev = "png", dpi = 180}
+vic_elec |> gg_season(Demand)
+```
+Interestingly demans seems to be higher in the first few months, which are the summer months in Australia. There is also a somewhat higher demand in the middle months, which is winter. While this is nice, this plot actually gives us not that much more information compared to the original time plot. Let us try to plot against \emph{days} instead of years.
+
+
+```{r, dev = "png", dpi = 180}
+vic_elec |> gg_season(Demand, period = "week")
+```
+Here we see that the weekend demand appears to be lower than the weekday demand. We now also compare to \emph{hours}:
+
+```{r, dev = "png", dpi = 180}
+vic_elec |> gg_season(Demand, period = "day")
+```
+Between midnight and 4am there is lowest demand. Then people wake up and demand increases, during the day demand slows down before picking up again during 6 pm. There are 3 days which have extra observations, which arise because of daylight saving time. 
+
+#3. Seasonal Subseries Plots
+
+```{r}
+PBS |>
+  filter(ATC2 == "A10") |>
+  select(Month, Concession, Type, Cost) |>
+  summarise(TotalC = sum(Cost)) |>
+  mutate(Cost = TotalC / 1e6) -> a10
+
+tourism <- tourism |>
+  mutate(
+    State = recode(State,
+      "Australian Capital Territory" = "ACT",
+      "New South Wales" = "NSW",
+      "Northern Territory" = "NT",
+      "Queensland" = "QLD",
+      "South Australia" = "SA",
+      "Tasmania" = "TAS",
+      "Victoria" = "VIC",
+      "Western Australia" = "WA"
+    )
+  )
+```
+
+## Seasonal subseries plots
+\fontsize{10}{10}\sf
+
+```{r, echo=TRUE, dependson="a10"}
+a10 |>
+  gg_subseries(Cost) +
+  labs(y = "$ million", title = "Subseries plot: antidiabetic drug sales")
+```
+Here we extract all the data for a given month (i.e. January) and plot them in separate plots. Blue lines are the average (monthly) values. Again January tends to have the higest values with a drop in February.
+
+\textbf{Subseries Plots}
+
+  * Data for each season collected together in time plot as separate time series.
+  * Enables the underlying seasonal pattern to be seen clearly, and changes in seasonality over time to be visualized.
+  * In R: `gg_subseries()`
+
+## Quarterly Australian Beer Production
+
+```{r fig.height = 2.8}
+beer <- aus_production |>
+  select(Quarter, Beer) |>
+  filter(year(Quarter) >= 1992)
+beer |> autoplot(Beer)
+```
+
+
+
+```{r}
+beer |> gg_subseries(Beer)
+```
+Again we can see that Q4 is the highest quarter of demand! Now however we can see that the decreasing trend in the overall series is arising from Q4 demand going down!
+
+
+## Australian holidays
+
+```{r holidays}
+holidays <- tourism |>
+  filter(Purpose == "Holiday") |>
+  group_by(State) |>
+  summarise(Trips = sum(Trips))
+```
+
+\fontsize{10}{10}\sf
+
+```{r, echo=FALSE}
+holidays
+```
+
+
+
+```{r holidays-plot, echo=TRUE, dependson="holidays"}
+holidays |> autoplot(Trips) +
+  labs(y = "thousands of trips", title = "Australian domestic holiday nights")
+```
+We can again see strong seasonal components across all states. There is also an increasing trend in some states after 2010.
+
+## Seasonal plots
+
+```{r graphics1}
+holidays |> gg_season(Trips) + 
+   facet_wrap(vars(State), nrow = 2, scales = "free_y")+
+   labs(y = "thousands of trips", title = "Australian domestic holiday nights")
+```
+The seasonality plots, ordered by state, we can actually see that the seasonality is very different for different states. This has to do with the weather situation in the different states of Australia. For instance NT, peak demand is in the winter quarter in Australia.
+
+
+## Seasonal subseries plots
+
+```{r graphics2, fig.height=3.1}
+holidays |>
+  gg_subseries(Trips) +
+  labs(y = "thousands of trips", title = "Australian domestic holiday nights")
+```
+
+
+In this case, the subseries plot doesn't reaveal much more.
+
+# 5. Scatterplot
+
+This section serves to uncover relationship between multiple time series!
+
+## Electricity Demand in Victoria, Australia
+
+\fontsize{9}{9}\sf
+
+```{r, echo=TRUE}
+vic_elec_day_type <- vic_elec |> 
+   filter(year(Time) == 2014) |> 
+   mutate(Day_Type = case_when(
+      Holiday ~ "Holiday",
+      wday(Date) %in% 2:6 ~ "Weekday", ## Define Monday-Friday as weekdays
+      TRUE ~ "Weekend"))
+vic_elec_day_type
+```
+
+## Time plots
+
+```{r, echo=FALSE, fig.height=3.6}
+vic_elec_day_type |> 
+   select(Temperature, Demand) |> 
+   pivot_longer(-Time) |> 
+   ggplot(aes(Time, value, colour = name)) +
+   geom_line() +
+   facet_grid(name ~ ., scales = "free_y") +
+   guides(colour = "none") +
+   labs(
+    y = "Degrees Celsius                   GW         "
+  )
+
+
+```
+
+(again the first few months correspond to summer in Australia.)
+
+## Scatterplots
+
+```{r, echo=TRUE, fig.height=2.2, fig.width=6}
+vic_elec_day_type |> 
+  ggplot(aes(x = Temperature, y = Demand)) +
+  geom_point() + 
+   labs(x = "Temperature (degrees Celsius)", y = "Electricity demand (GW)")
+```
+There seems to be a nonlinear relationship between the two variables, where on the left hand-side heating is responsible for the electricty demand, while on the right side of the plot it is air conditioning that seem to drive demand.
+
+
+```{r, echo=TRUE, fig.height=2.2, fig.width=6}
+vic_elec_day_type |> 
+  ggplot(aes(x = Temperature, y = Demand, colour = Day_Type)) +
+  geom_point() + 
+   labs(x = "Temperature (degrees Celsius)", y = "Electricity demand (GW)")
+```
+
+Split up between Holidays/Weekdays and Weekend. This reveals lower demands for the weekend, but with the same shape of demand. Moreover, Holiday days seem to behave similarly to weekends.
+
+## Correlation coefficient
+
+Measures the extent of a linear relationship between two variables ($y$ and $x$).
+\vspace{0.4cm}
+
+- $r=\frac{\sum_{t=1}^T(y_t-\bar{y})(x_t-\bar{x})}{\sqrt{\sum_{t=1}^T(y_t-\bar{y})^2} \sqrt{\sum_{t=1}^T(x_t-\bar{x})^2}}$
+
+
+\begin{itemize}
+  \item Lies between -1 and 1
+\end{itemize}
+
+Note that r would not be able to fully capture the nonlinar relationship displayed above.
+Many generalization nowadays that measure more than just linear relations, such as distance correlation (as we see later).
+
+
+
+## US consumption expenditure
+```{r, echo=FALSE, fig.height=5, fig.width=7.3}
+us_change |>
+   pivot_longer(-Quarter, names_to="Series") |>
+   autoplot(value) +
+   facet_grid(Series ~ ., scales = "free_y") + 
+   labs(y = "% change")
+```
+
+
+\vspace{-0.1cm}
+
+```{r, echo=TRUE, fig.height=5}
+us_change |> GGally::ggpairs(columns = 2:6)
+```
+
+
+There appears to be a strong positive linear relationship between Producion and Consumption, Savings and Income and a strong negative linear relationship between Unemployment and Consumption and Unemployment and Production.
+
+We can also use the more general concept of \emph{distance correlation} instead: We first define the distance covariance :
+\begin{align*}
+    &\mathcal{V}^2(X,Y) \\
+    &= \mathbb{E}_{\substack{(X, Y) \sim P_{t,t-h}\\ (X', Y') \sim P_{t,t-h}}}[|X - X'||Y - Y'|] + \mathbb{E}_{\substack{X \sim P_t\\ X' \sim P_t}}[|X - X'|]\mathbb{E}_{\substack{Y \sim P_t\\ Y' \sim P_t}}[|Y - Y'|] \\
+    &- \mathbb{E}_{\substack{(X, Y) \sim P_{t,t-h}\\ X' \sim P_{t} \\ Y'' \sim P_{t-h}}}[|X - X'||Y - Y''|]- \mathbb{E}_{\substack{(X, Y) \sim P_{t,t-h}\\ X'' \sim P_{t} \\ Y' \sim P_{t-h}}}[|X - X''||Y - Y'|]
+\end{align*}
+
+This looks quite ugly, but is essentially the energy distance between the joint distribution $P_{X,Y}$ (the actual distribution) and $P_{X} \times P_{Y}$, the distribution under independence of $Y_t$, $Y_{t-h}$.  
+
+We can then define the distance correlation:
+\begin{align*}
+    \mathcal{R}(X, Y) =  \frac{\mathcal{V}^2(X,Y)}{\sqrt{\mathcal{V}^2(X,X)\mathcal{V}^2(Y,Y)}}
+\end{align*}
+
+```{r}
+library(energy)
+library(GGally)
+
+# Custom function for distance correlation
+dcor_fun <- function(data, mapping) {
+  x <- eval_data_col(data, mapping$x)
+  y <- eval_data_col(data, mapping$y)
+  dcor_val <- dcor(x, y)
+  
+  # Create text annotation
+  ggally_text(
+    label = paste("dCor:", round(dcor_val, 3)), 
+    mapping = aes(),
+    xP = 0.5, yP = 0.5
+  )
+}
+
+# # Create the plot
+# ggpairs(your_data, 
+#         lower = list(continuous = "points"),
+#         diag = list(continuous = "densityDiag"),
+#         upper = list(continuous = dcor_fun))
+
+us_change |> GGally::ggpairs(columns = 2:6,
+                             lower = list(continuous = "points"),
+                             diag = list(continuous = "densityDiag"),
+                             upper = list(continuous = dcor_fun))
+
+```
+In this case there is no negative or positive correlation simply a number between 0 and 1 indicating the strength of the relationship between two variables. For instance, while the correlation between savings and production appears close to zero (-0.059), the distance correlation actually reveals some (nonlinear) relationship.
+
+
+# 6. Lag Plots
+
+
+## Example: Beer production
+\fontsize{9}{9}\sf
+
+```{r}
+new_production <- aus_production |>
+  filter(year(Quarter) >= 1992)
+new_production
+```
+
+
+
+```{r, fig.height=6, fig.width=6, out.width="6.4cm"}
+new_production |> gg_lag(Beer, geom = "point")
+```
+
+Each graph shows $y_t$ plotted against $y_{t-k}$ for different values of $k$. First plot plots $y_t$ again $y_{t-1}$, second plot $y_t$ again $y_{t-2}$ and so on. Note that for lag 4, we plot Q4 of this year against Q4 of the previous year (4 quarters lag). Since this data has strong seasonality (values in Q4 this year tend to be strongly related to values in Q4 of the previous year) we observe a strong relationship.
+
+
+
+
+```{r, fig.height=6, fig.width=6, out.width="6.4cm"}
+new_production |> gg_lag(Beer)
+```
+
+
+Each graph shows $y_t$ plotted against $y_{t-k}$ for different values of $k$. This time with lines instead of points, showing the time ordering. In this case, this doesn't really add information.
+
+
+
+# 7. Autocorrelation
+## TO DO: ADD Example of distance autocorrelation
+
+One of the key tools to understand a time series.
+
+```{r}
+library(patchwork)
+new_production <- aus_production |>
+  filter(year(Quarter) >= 1992)
+```
+
+## Example: Beer production
+
+```{r, fig.height=6, fig.width=6, out.width="6.5cm"}
+new_production |> gg_lag(Beer, geom = "point")
+```
+
+
+\begin{itemize}\tightlist
+\item Each graph shows $y_t$ plotted against $y_{t-k}$ for
+different values of $k$.
+\item The autocorrelations are the correlations associated
+with these scatterplots.
+\item $r_1=\text{Correlation}(y_{t}, y_{t-1})$
+\item $r_2=\text{Correlation}(y_{t}, y_{t-2})$
+\item $r_3=\text{Correlation}(y_{t}, y_{t-3})$ \\ \hspace*{0.5cm} $\vdots$
+\end{itemize}
+
+
+## Autocorrelation
+
+We denote the sample autocovariance at lag $k$ by $c_k$ and the sample autocorrelation at lag $k$ by $r_k$.  Then define
+
+
+\begin{align*}
+c_h &= \frac{1}{T}\sum_{t=h+1}^T (y_t-\bar{y})(y_{t-h}-\bar{y}) \\[0.cm]
+\text{and}\qquad
+r_{h} &= c_h/c_0
+\end{align*}
+
+
+
+
+  * $r_1$ indicates how successive values of $y$ relate to each other
+  * $r_2$ indicates how $y$ values two periods apart relate to each other
+  * $r_k$ is \textit{almost} the same as the sample correlation between $y_t$ and $y_{t-k}$.
+
+
+
+Results for first 9 lags for beer data:
+
+\fontsize{11}{13}\sf
+
+```{r, echo=TRUE}
+# ACF function for the acf plot
+new_production |> ACF(Beer, lag_max = 9)
+```
+
+
+
+Results for first 9 lags for beer data:
+
+```{r beeracf, fig.height=1.8}
+new_production |> ACF(Beer, lag_max = 9) |> autoplot()
+```
+Plot of the correlation for different lags, with confidence bands. These confidence bands are not simultaneous, so even if all lags are truly zero, we would expect around $5\%$ of values to fall outside. Again we see the strong correlation at lag 4 and 8, showing the seasonal pattern.
+
+
+\vspace*{-0.2cm}
+
+  * Together, the autocorrelations at lags 1, 2, \dots, make up the \emph{autocorrelation} or ACF.
+  * The plot is known as a **correlogram**
+
+\vspace*{10cm}
+
+
+
+\fontsize{14}{14}\sf
+
+```{r beeracf2, fig.height=1.8}
+new_production |> ACF(Beer) |> autoplot()
+```
+
+  * $r_{4}$  higher than for the other lags due to **the seasonal pattern in the data**: peaks tend to be **4 quarters** apart and troughs tend to be **4 quarters** apart.
+  * $r_2$ is more negative than for the other lags because troughs tend to be 2 quarters behind peaks.
+
+
+
+
+## Trend and seasonality in ACF plots
+
+- When data have a trend, the autocorrelations for small lags tend to be large and positive.
+- When data are seasonal, the autocorrelations will be larger at the \textbf{seasonal lags} (i.e., at multiples of the seasonal frequency)
+- When data are trended and seasonal, you see a combination of these effects.
+
+## US retail trade employment
+\fontsize{10}{10}\sf
+
+```{r}
+retail <- us_employment |>
+  filter(Title == "Retail Trade", year(Month) >= 1980)
+retail |> autoplot(Employed)
+```
+This data is both trending and seasonal.
+
+## US retail trade employment
+\fontsize{10}{10}\sf
+
+```{r}
+retail |>
+  ACF(Employed, lag_max = 48) |>
+  autoplot()
+```
+Here all autocorrelations are strongly positive because of the trend. There is also a small peak around the seasonal multiples (12, 24). This is the effect of seasonality.
+
+## Google stock price
+\fontsize{10}{10}\sf
+
+```{r}
+google_2015 <- gafa_stock |>
+  filter(Symbol == "GOOG", year(Date) == 2015) |>
+  select(Date, Close)
+google_2015
+```
+
+Note the exclamation mark above, it means the data is not regularly spaced (simply because trading does not happen every day).
+
+## Google stock price
+\fontsize{10}{10}\sf
+
+```{r}
+google_2015 |> autoplot(Close)
+```
+We see some general upward trend in this series (approximately).
+
+## Google stock price
+\fontsize{10}{10}\sf
+
+```{r}
+google_2015 |>
+  ACF(Close, lag_max = 100)
+```
+
+
+## Google stock price
+\fontsize{10}{10}\sf
+
+```{r}
+google_2015 |>
+  ACF(Close, lag_max = 100) |>
+  autoplot()
+```
+Again the high positive autocorrelations indicate the trend.
+
+##Distance Autocorrelation
+
+Since autocorrelations only pick up on linear dependencies, generalizations are useful. In particular we will study the distance autcorrelation $\mathcal{R}(Y_{t}, Y_{t-h})$, which is simply the distance correlation between $Y_t$ and $Y_{t-h}$.
+
+
+
+
+```{r}
+library(patchwork)
+library(dCovTS)
+library(doSNOW)
+google_2015 |>
+     pull(Close) |>
+     na.omit() |>
+     ADCFplot()
+```
+
+
+```{r}
+retail |>
+  pull(Employed) |>
+  ADCFplot(MaxLag=48)
+```
+
+
+# 8. White Noise
+
+
+## Example: White noise
+\fontsize{10}{10}\sf
+
+```{r wn}
+set.seed(30)
+wn <- tsibble(t = 1:50, y = rnorm(50), index = t)
+wn |> autoplot(y)
+```
+
+White noise data is uncorrelated across time with zero mean and constant variance.
+(Technically, we require independence as well.) The marginal distribution $P_t$ is however not known in general.
+
+\vspace*{10cm}
+
+
+\fontsize{10}{10}\sf
+
+```{r}
+wn |> ACF(y)
+```
+
+\fontsize{10}{10}\sf\tabcolsep=0.1cm
+
+```{r wnacf, echo=FALSE, dependson="wn"}
+wn |>
+  ACF(y, lag_max = 10) |>
+  as_tibble() |>
+  mutate(lag = as.numeric(lag)) |>
+  pivot_wider(names_from = lag, values_from = acf) |>
+  rename_all(function(x) {
+    paste("$r_{", x, "}$", sep = "")
+  }) |>
+  knitr::kable(
+    booktabs = TRUE,
+    escape = FALSE, align = "c", digits = 3,
+    format.args = list(nsmall = 3)
+  )
+```
+
+```{r, echo=FALSE, fig.height=1.5}
+wn |>
+  ACF(y) |>
+  autoplot()
+```
+
+\pause
+
+ * Sample autocorrelations for white noise series.
+ * Expect each autocorrelation to be close to zero.
+ * Blue lines show 95% critical values.
+
+\vspace*{10cm}
+
+## \large Sampling distribution of autocorrelations
+
+Sampling distribution of $r_k$ for white noise data is asymptotically N(0,$1/T$).\pause
+
+  *  95% of all $r_k$ for white noise must lie within $\pm 1.96/\sqrt{T}$.
+  * If this is not the case, the series is probably not WN.
+  * Common to plot lines at $\pm 1.96/\sqrt{T}$ when plotting ACF.
+These are the \emph{critical values}.
+
+
+In contrast the distance autocorrelation approach uses a bootstrap scheme to get \emp{uniform} confidence bands. Thus as soon as 1 lag is above the line, independence can be rejected:
+
+```{r}
+wn |>
+  pull(y) |>
+  ADCFplot()  
+```
+
+
+
+## Example: Pigs slaughtered
+\fontsize{10}{10}\sf
+
+```{r, fig.height=2.7}
+pigs <- aus_livestock |>
+  filter(State == "Victoria", Animal == "Pigs", year(Month) >= 2014)
+pigs |> autoplot(Count / 1e3) +
+  labs(y = "Thousands", title = "Number of pigs slaughtered in Victoria")
+```
+
+
+\fontsize{10}{10}\sf
+
+```{r}
+pigs |>
+  ACF(Count) |>
+  autoplot()
+```
+
+
+
+Monthly total number of pigs slaughtered
+in the state of Victoria, Australia, from January 2014 through December 2018
+(Source: Australian Bureau of Statistics.)\pause
+
+  * Difficult to detect pattern in time plot.
+  * ACF shows significant autocorrelation for lag 2 and 12.
+  * Indicate some slight seasonality.
+
+These show the series is **not a white noise series**.
+
+
+```{r}
+pigs |>
+  pull(Count) |>
+  ADCFplot()  
+```
+
+Again we see a significant spike (even in the uniform confidence bands) at lag 12, indicating seasonality.

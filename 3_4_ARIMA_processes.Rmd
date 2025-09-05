@@ -1,0 +1,350 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-08-11"
+---
+---
+title: "Analysis of ARIMA(p,d,q) Processes"
+output: html_document
+date: "2025-08-11"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Load required libraries
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+library(forecast)
+library(fpp3)
+# Set seed for reproducibility
+set.seed(456)
+```
+
+# Introduction to ARIMA(p,d,q) Processes
+
+ARIMA(p,d,q) processes extend ARMA models to handle **non-stationary** time series:
+
+$$\Phi(L)(1-L)^d Y_t = \Theta(L)\epsilon_t$$
+
+Where
+
+-**p**: Order of autoregression (AR component)
+-**d**: Degree of differencing (Integration component) 
+-**q**: Order of moving average (MA component)
+
+**Key concepts:**
+
+-**Differencing**: Transforms non-stationary series to stationary
+-**Integration**: Original series is sum (integral) of stationary differences
+-**Unit roots**: Non-stationary behavior requiring differencing
+
+```{r}
+# Simulation parameters
+n_obs <- 400
+time_points <- 1:n_obs
+```
+
+## The Differencing Component: Understanding d
+
+The differencing parameter d determines how many times we difference the series:
+
+```{r differencing_illustration}
+# Generate different types of non-stationary processes
+set.seed(123)
+
+# d=0: Stationary ARMA(1,1)
+stationary <- arima.sim(n = n_obs, list(ar = 0.7, ma = 0.3))
+
+# d=1: Random walk with drift + ARMA structure
+# Simulate ARIMA(1,1,1) by generating ARMA(1,1) differences
+arma_diffs <- arima.sim(n = n_obs-1, list(ar = 0.3, ma = 0.4))
+integrated_once <- cumsum(c(0, arma_diffs + 0.05))  # Adding drift
+
+# d=2: Double integration (trend + stochastic trend)
+arma_diffs2 <- arima.sim(n = n_obs-2, list(ar = 0.2, ma = 0.3))
+first_diff <- cumsum(c(0, arma_diffs2 + 0.02))
+integrated_twice <- cumsum(c(0, first_diff))
+
+# Create comparison dataset
+diff_data <- data.frame(
+  time = rep(time_points, 3),
+  value = c(stationary, 
+           integrated_once, 
+           integrated_twice),
+  process = rep(c("d=0 (Stationary)", "d=1 (Random Walk)", "d=2 (Quadratic Trend)"), 
+                each = n_obs)
+)
+
+# Plot different integration orders
+p_diff <- ggplot(diff_data, aes(x = time, y = value)) +
+  geom_line(aes(color = process), size = 0.8) +
+  facet_wrap(~process, scales = "free_y", ncol = 1) +
+  labs(title = "Effect of Differencing Parameter d",
+       subtitle = "How integration order affects time series behavior",
+       x = "Time", y = "Value") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        strip.text = element_text(size = 12))
+
+print(p_diff)
+
+# Show the differencing process
+cat("Differencing Process:\n")
+cat("Original d=1 series (first 10 values):", round(integrated_once[1:10], 2), "\n")
+cat("After 1st differencing:", round(diff(integrated_once)[1:9], 2), "\n")
+cat("Original d=2 series (first 10 values):", round(integrated_twice[1:10], 2), "\n")
+cat("After 1st differencing:", round(diff(integrated_twice)[1:9], 2), "\n")
+cat("After 2nd differencing:", round(diff(integrated_twice, differences = 2)[1:8], 2), "\n")
+```
+
+## ARIMA(1,1,1) Process: The Workhorse Model
+
+One of the most commonly used ARIMA specifications:
+
+$$\nabla Y_t = \phi_1 \nabla Y_{t-1} + \epsilon_t + \theta_1 \epsilon_{t-1}$$
+
+Where $\nabla Y_t = Y_t - Y_{t-1}$ (first difference)
+
+```{r arima111_simulation}
+# Different ARIMA(1,1,1) parameter combinations
+arima111_params <- list(
+  list(ar = 0.5, ma = 0.3, drift = 0, label = "phi_1=0.5, theta_1=0.3, no drift"),
+  list(ar = 0.7, ma = -0.4, drift = 0.02, label = "phi_1=0.7, theta_1=-0.4, with drift"),
+  list(ar = -0.3, ma = 0.6, drift = 0, label = "phi_1=-0.3, theta_1=0.6, oscillating"),
+  list(ar = 0.2, ma = 0.8, drift = -0.01, label = "phi_1=0.2, theta_1=0.8, downward drift")
+)
+
+arima111_data <- data.frame()
+
+for (i in seq_along(arima111_params)) {
+  params <- arima111_params[[i]]
+  
+  # Generate ARMA process for differences
+  diff_series <- arima.sim(n = n_obs-1, 
+                          list(ar = params$ar, ma = params$ma)) + params$drift
+  
+  # Integrate to get ARIMA(1,1,1)
+  integrated_series <- cumsum(c(0, diff_series))
+  
+  temp_df <- data.frame(
+    time = time_points,
+    value = integrated_series,
+    params = params$label,
+    process = "ARIMA(1,1,1)"
+  )
+  arima111_data <- rbind(arima111_data, temp_df)
+}
+
+# Plot ARIMA(1,1,1) processes
+p_arima111 <- ggplot(arima111_data, aes(x = time, y = value)) +
+  geom_line(color = "darkblue", alpha = 0.8) +
+  facet_wrap(~params, scales = "free_y", ncol = 2) +
+  labs(title = "ARIMA(1,1,1) Processes with Different Parameters",
+       subtitle = "Notice trends, persistence, and shock effects",
+       x = "Time", y = "Value") +
+  theme_minimal() +
+  theme(strip.text = element_text(size = 10))
+
+print(p_arima111)
+```
+
+## Stationarity Testing and Model Identification
+
+Before fitting ARIMA models, we need to determine d through stationarity tests:
+
+```{r stationarity_analysis}
+# Generate a non-stationary series for analysis
+set.seed(789)
+test_series <- cumsum(arima.sim(n = 300, list(ar = 0.4, ma = 0.3))) + 
+               0.02 * (1:300)  # Add linear trend
+
+# Function to perform ADF test (simplified version)
+adf_test_simple <- function(x, lags = 1) {
+  n <- length(x)
+  y_lag <- x[-n]
+  y_diff <- diff(x)
+  
+  # Regression: Δy_t = α + βy_{t-1} + ε_t
+  model <- lm(y_diff ~ y_lag)
+  beta <- coef(model)[2]
+  se_beta <- summary(model)$coefficients[2, 2]
+  t_stat <- beta / se_beta
+  
+  return(list(t_statistic = t_stat, p_value = 2 * pt(abs(t_stat), df = n-2, lower.tail = FALSE)))
+}
+
+# Test original series
+original_adf <- adf_test_simple(test_series)
+# Test first difference
+diff1_adf <- adf_test_simple(diff(test_series))
+
+# Create analysis plots
+par(mfrow = c(2, 3))
+
+# Original series
+plot(test_series, type = "l", main = "Original Series (Non-stationary)", 
+     col = "red", ylab = "Value")
+acf(test_series, main = "ACF: Original", lag.max = 20)
+pacf(test_series, main = "PACF: Original", lag.max = 20)
+
+# First difference
+plot(diff(test_series), type = "l", main = "First Difference (Stationary)", 
+     col = "blue", ylab = "Δ Value")
+acf(diff(test_series), main = "ACF: First Difference", lag.max = 20)
+pacf(diff(test_series), main = "PACF: First Difference", lag.max = 20)
+
+par(mfrow = c(1, 1))
+
+cat("Stationarity Test Results:\n")
+cat("Original series ADF t-statistic:", round(original_adf$t_statistic, 3), "\n")
+cat("First difference ADF t-statistic:", round(diff1_adf$t_statistic, 3), "\n")
+cat("(More negative = more likely stationary)\n\n")
+
+cat("ACF Pattern Analysis:\n")
+cat("- Original series: Slow decay → Non-stationary\n")
+cat("- First difference: Rapid decay → Stationary\n")
+cat("- Conclusion: d = 1 needed\n")
+```
+
+
+
+
+
+
+
+<!-- ## Model Selection: Comparing Different ARIMA Specifications -->
+
+<!-- Let's demonstrate systematic ARIMA model selection: -->
+
+<!-- ```{r arima_model_selection} -->
+<!-- # Generate true ARIMA(2,1,1) process -->
+<!-- set.seed(456) -->
+<!-- true_arima <- cumsum(arima.sim(n = 250, list(ar = c(0.6, -0.2), ma = 0.4))) -->
+
+<!-- # Fit various ARIMA models and compare -->
+<!-- models <- list() -->
+<!-- results <- data.frame() -->
+
+<!-- for (p in 0:3) { -->
+<!--   for (d in 0:2) { -->
+<!--     for (q in 0:3) { -->
+<!--       if (p == 0 & d == 0 & q == 0) next  # Skip white noise -->
+
+<!--       tryCatch({ -->
+<!--         model <- arima(true_arima, order = c(p, d, q)) -->
+
+<!--         results <- rbind(results, data.frame( -->
+<!--           p = p, d = d, q = q, -->
+<!--           AIC = AIC(model), -->
+<!--           BIC = BIC(model), -->
+<!--           loglik = model$loglik -->
+<!--         )) -->
+<!--       }, error = function(e) NULL) -->
+<!--     } -->
+<!--   } -->
+<!-- } -->
+
+<!-- # Find best models -->
+<!-- best_aic <- results[which.min(results$AIC), ] -->
+<!-- best_bic <- results[which.min(results$BIC), ] -->
+
+<!-- cat("True model: ARIMA(2,1,1)\n") -->
+<!-- cat("Best by AIC: ARIMA(", best_aic$p, ",", best_aic$d, ",", best_aic$q,  -->
+<!--     "), AIC =", round(best_aic$AIC, 2), "\n") -->
+<!-- cat("Best by BIC: ARIMA(", best_bic$p, ",", best_bic$d, ",", best_bic$q,  -->
+<!--     "), BIC =", round(best_bic$BIC, 2), "\n") -->
+
+<!-- # Show top 5 models -->
+<!-- cat("\nTop 5 models by AIC:\n") -->
+<!-- top_models <- results[order(results$AIC), ][1:5, ] -->
+<!-- top_models$model <- paste0("ARIMA(", top_models$p, ",", top_models$d, ",", top_models$q, ")") -->
+<!-- print(top_models[, c("model", "AIC", "BIC")]) -->
+
+<!-- # Plot model selection results for d=1 models only -->
+<!-- d1_results <- results[results$d == 1, ] -->
+<!-- d1_results$model <- paste0("(", d1_results$p, ",1,", d1_results$q, ")") -->
+
+<!-- p_selection <- ggplot(d1_results, aes(x = model, y = AIC)) + -->
+<!--   geom_col(fill = "steelblue", alpha = 0.7) + -->
+<!--   geom_point(data = d1_results[d1_results$p == best_aic$p & d1_results$q == best_aic$q, ],  -->
+<!--              aes(x = model, y = AIC), color = "red", size = 3) + -->
+<!--   labs(title = "ARIMA Model Selection (d=1 models only)",  -->
+<!--        subtitle = "Red dot shows best AIC model", -->
+<!--        x = "ARIMA(p,1,q)", y = "AIC") + -->
+<!--   theme_minimal() + -->
+<!--   theme(axis.text.x = element_text(angle = 45, hjust = 1)) -->
+
+<!-- print(p_selection) -->
+<!-- ``` -->
+
+<!-- ## Forecasting with ARIMA Models -->
+
+<!-- ARIMA models excel at forecasting non-stationary series: -->
+
+<!-- ```{r arima_forecasting} -->
+<!-- # Fit the best model and generate forecasts -->
+<!-- best_model <- arima(true_arima, order = c(best_aic$p, best_aic$d, best_aic$q)) -->
+
+<!-- # Generate forecasts -->
+<!-- forecast_horizon <- 30 -->
+<!-- forecasts <- predict(best_model, n.ahead = forecast_horizon) -->
+
+<!-- # Create forecast plot data -->
+<!-- forecast_data <- data.frame( -->
+<!--   time = c(1:length(true_arima), (length(true_arima)+1):(length(true_arima)+forecast_horizon)), -->
+<!--   value = c(true_arima, forecasts$pred), -->
+<!--   lower = c(rep(NA, length(true_arima)), forecasts$pred - 1.96*forecasts$se), -->
+<!--   upper = c(rep(NA, length(true_arima)), forecasts$pred + 1.96*forecasts$se), -->
+<!--   type = c(rep("Observed", length(true_arima)), rep("Forecast", forecast_horizon)) -->
+<!-- ) -->
+
+<!-- # Plot forecasts -->
+<!-- p_forecast <- ggplot(forecast_data, aes(x = time, y = value)) + -->
+<!--   geom_line(aes(color = type), size = 0.8) + -->
+<!--   geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.3, fill = "blue") + -->
+<!--   geom_vline(xintercept = length(true_arima), linetype = "dashed", alpha = 0.5) + -->
+<!--   scale_color_manual(values = c("Observed" = "black", "Forecast" = "blue")) + -->
+<!--   labs(title = paste0("ARIMA(", best_aic$p, ",", best_aic$d, ",", best_aic$q, ") Forecasts"), -->
+<!--        subtitle = "95% confidence intervals shown in blue", -->
+<!--        x = "Time", y = "Value", color = "Series") + -->
+<!--   theme_minimal() -->
+
+<!-- print(p_forecast) -->
+
+<!-- # Show forecast statistics -->
+<!-- cat("Forecast Summary:\n") -->
+<!-- cat("Model:", paste0("ARIMA(", best_aic$p, ",", best_aic$d, ",", best_aic$q, ")"), "\n") -->
+<!-- cat("Forecast horizon:", forecast_horizon, "periods\n") -->
+<!-- cat("Final observed value:", round(tail(true_arima, 1), 2), "\n") -->
+<!-- cat("Final forecast value:", round(tail(forecasts$pred, 1), 2), "\n") -->
+<!-- cat("Average forecast standard error:", round(mean(forecasts$se), 3), "\n") -->
+<!-- ``` -->
+
+## Key Takeaways
+
+### **ARIMA Model Capabilities:**
+
+1. **Non-stationarity handling**: Differencing (d) transforms trending data to stationary
+
+2. **Flexible patterns**: 
+   - **p**: Captures autoregressive dependencies in differenced series
+   - **d**: Handles trends and unit roots
+   - **q**: Models shock effects and error correction
+
+3. **Forecasting power**: 
+   - Trends are extrapolated through integration
+   - Uncertainty increases appropriately over time
+   - Confidence intervals reflect both parameter and forecast uncertainty
+
+4. **Model selection**: 
+   - Test for optimal d using stationarity tests
+   - Use AIC/BIC to select p and q
+   - Consider parsimony vs. fit trade-offs
+
+### **Practical Guidelines:**
+
+- **d=0**: Stationary series (use ARMA)
+- **d=1**: Series with stochastic trends (most common)
+- **d=2**: Series with changing growth rates (rare)
+- **d≥3**: Usually indicates over-differencing
