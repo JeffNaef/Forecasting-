@@ -1,0 +1,257 @@
+---
+title: "STL decomposition"
+output: html_document
+date: "2025-08-12"
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(tsibble)
+library(gridExtra)
+library(patchwork)
+library(dCovTS)
+library(doSNOW)
+library(fpp3)
+library(gganimate)
+```
+
+
+## Time series patterns
+
+**Recall**
+
+Trend
+:  pattern exists when there is a long-term increase or decrease in the data.
+
+Cyclic
+: pattern exists when data exhibit rises and falls that are *not of fixed period* (duration usually of at least 2 years).
+
+Seasonal
+: pattern exists when a series is influenced by seasonal factors (e.g., the quarter of the year, the month, or day of the week).
+
+## Time series decomposition
+
+\begin{block}{}\vspace*{-0.3cm}
+\[ Y_t = f(S_t, T_t, \varepsilon_t) \]
+\end{block}
+\begin{tabular}{@{}llp{8cm}@{}}
+where & $Y_t=$ & data at period $t$ \\
+      & $T_t=$ & trend-cycle component at period $t$\\
+      & $S_t=$ & seasonal component at period $t$ \\
+      & $\varepsilon_t=$ & remainder component at period $t$
+\end{tabular}
+\pause
+
+**Additive decomposition:** $Y_t = S_t + T_t + \varepsilon_t.$
+
+**Multiplicative decomposition:** $Y_t = S_t \times T_t \times \varepsilon_t.$
+
+## Time series decomposition
+\fontsize{13}{15}\sf
+
+  *  Additive model  appropriate if  magnitude of  seasonal fluctuations does not vary with level.
+  *  If seasonal are proportional to level of series, then multiplicative model appropriate.
+  *  Multiplicative decomposition more prevalent with economic series
+  *  Alternative: use a Box-Cox transformation, and then use additive decomposition.
+  *  Logs turn multiplicative relationship into an additive relationship:
+
+
+$$Y_t = S_t \times T_t \times \varepsilon_t \quad\Rightarrow\quad
+\log Y_t = \log S_t + \log T_t + \log \varepsilon_t.$$
+
+
+## US Retail Employment
+\fontsize{11}{11}\sf
+
+```{r usretail}
+us_retail_employment <- us_employment |>
+  filter(year(Month) >= 1990, Title == "Retail Trade") |>
+  select(-Series_ID)
+us_retail_employment
+```
+
+We first plot the data:
+
+
+```{r dable1}
+us_retail_employment |>
+  autoplot(Employed) +
+  labs(y = "Persons (thousands)", title = "Total employment in US retail")
+```
+
+There is some trend-cycle and seasonality in this plot: The trend-cycle corresponds to the long-term rises and falls of the series over the years. We thus use STL for this series:
+
+\fontsize{11}{11}\sf
+
+```{r dable2}
+us_retail_employment |>
+  model(stl = STL(Employed))
+```
+Inside this cell there is a lot of information into a "dable":
+
+\fontsize{11}{11}\sf
+
+```{r dable3}
+dcmp <- us_retail_employment |>
+  model(stl = STL(Employed))
+components(dcmp)
+```
+
+
+
+```{r usretail-stl, fig.width=8, fig.height=5}
+components(dcmp) |> autoplot()
+```
+Here the seasonal pattern doesn't seem to change much, though there is a small difference at the start, as compared to the end. Note that the gray bars give us infromation on how the different plots scale. We can also plot the trend over the original series:
+
+```{r dable4}
+us_retail_employment |>
+  autoplot(Employed, color = "gray") +
+  autolayer(components(dcmp), trend, color = "#D55E00") +
+  labs(y = "Persons (thousands)", title = "Total employment in US retail")
+```
+
+We can also do subseries plots:
+
+```{r usretail3}
+components(dcmp) |> gg_subseries(season_year)
+```
+
+## Seasonal adjustment
+
+  *  Useful by-product of decomposition:  an easy way to calculate seasonally adjusted data.
+  *  Additive decomposition: seasonally adjusted data given by
+$$Y_t - S_t = T_t + \varepsilon_t$$
+  *  Multiplicative decomposition: seasonally adjusted data given by
+$$Y_t / S_t = T_t \times \varepsilon_t$$
+
+
+
+```{r usretail-sa}
+us_retail_employment |>
+  autoplot(Employed, color = "gray") +
+  autolayer(components(dcmp), season_adjust, color = "#0072B2") +
+  labs(y = "Persons (thousands)", title = "Total employment in US retail")
+
+```
+Here we plotted the trend + remainder, this is why it is less smooth
+
+## Seasonal adjustment
+
+  * We use estimates of $S$ based on past values to seasonally adjust a current value.
+  *  Seasonally adjusted series reflect **remainders** as well as **trend**. Therefore they are not "smooth" and "downturns" or "upturns" can be misleading.
+  *  It is better to use the trend-cycle component to look for turning points.
+
+
+
+## STL decomposition in Detail
+
+\fontsize{13}{14}\sf
+
+  *  STL: "Seasonal and Trend decomposition using Loess"
+  *  Very versatile and robust.
+  *  Unlike X-12-ARIMA, STL will handle any type of seasonality.
+  *  Seasonal component allowed to change over time, and rate of change controlled by user.
+  *  Smoothness of trend-cycle also controlled by user.
+  *  Robust to outliers
+  *  Not trading day or calendar adjustments.
+  *  Only additive.
+  *  Take logs to get multiplicative decomposition.
+  *  Use Box-Cox transformations to get other decompositions.
+
+## STL decomposition
+
+```{r usretail, include=FALSE}
+us_retail_employment <- us_employment |>
+  filter(year(Month) >= 1990, Title == "Retail Trade") |>
+  select(-Series_ID)
+us_retail_employment
+```
+
+```{r stlwindow9, warning=FALSE, fig.width=8.5, fig.height=3.4}
+us_retail_employment |>
+  model(STL(Employed ~ season(window = 9), robust = TRUE)) |>
+  components() |>
+  autoplot() + labs(title = "STL decomposition: US retail employment")
+```
+
+## STL decomposition
+
+```{r stlwindowanim, echo=FALSE, warning=FALSE, message=FALSE, fig.show='animate', interval=1/10,  fig.height=5.35, fig.width=8, aniopts='controls,buttonsize=0.3cm,width=11.5cm', eval=TRUE}
+s_windows <- seq(5, 55, by = 2)
+stl_defs <- purrr::map(s_windows, function(s_window) {
+  STL(Employed ~ season(window = s_window), robust = TRUE)
+})
+names(stl_defs) <- sprintf("season(window=%02d)", s_windows)
+
+us_retail_employment |>
+  model(!!!stl_defs) |>
+  components() |>
+  as_tibble() |>
+  pivot_longer(Employed:remainder,
+    names_to = "component", names_ptypes = list(component = factor(levels = c("Employed", "trend", "season_year", "remainder"))),
+    values_to = "Employed"
+  ) |>
+  ggplot(aes(x = Month, y = Employed)) +
+  geom_line() +
+  facet_grid(rows = vars(component), scales = "free_y") +
+  labs(
+    title = "STL decomposition of US retail employment",
+    subtitle = "{closest_state}"
+  ) +
+  transition_states(.model, wrap=FALSE)
+```
+
+\vspace*{10cm}
+
+## STL decomposition
+
+```{r echo = TRUE, results = 'hide'}
+us_retail_employment |>
+  model(STL(Employed ~ season(window = 5))) |>
+  components()
+
+us_retail_employment |>
+  model(STL(
+    Employed ~ trend(window = 15) +
+      season(window = "periodic"),
+    robust = TRUE
+  )) |>
+  components()
+```
+
+\fontsize{12}{13}\sf
+
+  *  `trend(window = ?)` controls wiggliness of trend component.
+  *  `season(window = ?)` controls variation on seasonal component.
+  *  `season(window = 'periodic')` is equivalent to an infinite window.
+
+## STL decomposition
+
+```{r mstl, fig.width=8.5, fig.height=3.4}
+us_retail_employment |>
+  model(STL(Employed)) |>
+  components() |>
+  autoplot()
+```
+
+\only<2>{\begin{textblock}{7}(8,0.2)\fontsize{11}{11}\sf
+\begin{alertblock}{}
+\begin{itemize}\tightlist
+\item \texttt{STL()} chooses \texttt{season(window=13)} by default
+\item Can include transformations.
+\end{itemize}
+\end{alertblock}
+\end{textblock}}
+
+## STL decomposition
+\fontsize{13}{14.5}\sf
+
+* Algorithm that updates trend and seasonal components iteratively.
+* Starts with $\hat{T}_t=0$
+* Uses a mixture of loess and moving averages to successively refine the trend and seasonal estimates.
+* The trend window controls loess bandwidth applied to deasonalised values.
+* The season window controls loess bandwidth applied to detrended subseries.
+* Robustness weights based on remainder.
+* Default season: `window = 13`
+* Default trend:\mbox{}\hfill\hbox{\texttt{window = nextodd(ceiling((1.5*period)/(1-(1.5/s.window)))}}
