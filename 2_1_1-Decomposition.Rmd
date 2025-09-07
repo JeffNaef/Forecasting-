@@ -63,7 +63,7 @@ $$Y_t = S_t \times T_t \times \varepsilon_t \quad\Rightarrow\quad
 ## US Retail Employment
 \fontsize{11}{11}\sf
 
-```{r usretail}
+```{r usretail2}
 us_retail_employment <- us_employment |>
   filter(year(Month) >= 1990, Title == "Retail Trade") |>
   select(-Series_ID)
@@ -159,8 +159,8 @@ Here we plotted the trend + remainder, this is why it is less smooth
   *  Take logs to get multiplicative decomposition.
   *  Use Box-Cox transformations to get other decompositions.
 
-## STL decomposition
 
+We first prepare the data:
 ```{r usretail, include=FALSE}
 us_retail_employment <- us_employment |>
   filter(year(Month) >= 1990, Title == "Retail Trade") |>
@@ -168,43 +168,52 @@ us_retail_employment <- us_employment |>
 us_retail_employment
 ```
 
-```{r stlwindow9, warning=FALSE, fig.width=8.5, fig.height=3.4}
+Now let's try STL with different options: First the standard polot
+
+
+```{r stlstandard, warning=FALSE, fig.width=8.5, fig.height=3.4}
 us_retail_employment |>
-  model(STL(Employed ~ season(window = 9), robust = TRUE)) |>
+  model(STL(Employed)) |>
   components() |>
   autoplot() + labs(title = "STL decomposition: US retail employment")
 ```
 
-## STL decomposition
+We see that the seasonal patterns change a bit over time. Lets say we do not want this, then we type:
 
-```{r stlwindowanim, echo=FALSE, warning=FALSE, message=FALSE, fig.show='animate', interval=1/10,  fig.height=5.35, fig.width=8, aniopts='controls,buttonsize=0.3cm,width=11.5cm', eval=TRUE}
-s_windows <- seq(5, 55, by = 2)
-stl_defs <- purrr::map(s_windows, function(s_window) {
-  STL(Employed ~ season(window = s_window), robust = TRUE)
-})
-names(stl_defs) <- sprintf("season(window=%02d)", s_windows)
-
+```{r stlwindowperiodic, warning=FALSE, fig.width=8.5, fig.height=3.4}
 us_retail_employment |>
-  model(!!!stl_defs) |>
+  model(STL(Employed ~ season(window = "periodic"))) |>
   components() |>
-  as_tibble() |>
-  pivot_longer(Employed:remainder,
-    names_to = "component", names_ptypes = list(component = factor(levels = c("Employed", "trend", "season_year", "remainder"))),
-    values_to = "Employed"
-  ) |>
-  ggplot(aes(x = Month, y = Employed)) +
-  geom_line() +
-  facet_grid(rows = vars(component), scales = "free_y") +
-  labs(
-    title = "STL decomposition of US retail employment",
-    subtitle = "{closest_state}"
-  ) +
-  transition_states(.model, wrap=FALSE)
+  autoplot() + labs(title = "STL decomposition: US retail employment")
+```
+Now we have the same pattern every year. We can also change the number of windows that are used. The smaller this number, the more the seasonal patterns is allowed to change (we essentially use smaller windows to estimate the seasonal component):
+
+```{r stlwindow94, warning=FALSE, fig.width=8.5, fig.height=3.4}
+us_retail_employment |>
+  model(STL(Employed ~ season(window = 9))) |>
+  components() |>
+  autoplot() + labs(title = "STL decomposition: US retail employment")
 ```
 
-\vspace*{10cm}
+We can also influence how the trend is plotted. Again, the window size allows us to influence how many windows are used to estimate the trend: The lower this number, the more ``wiggly'' the trend is estimated. In the extreme of a very high value, the trend becomes a straight line.
 
-## STL decomposition
+```{r stlwindow92, warning=FALSE, fig.width=8.5, fig.height=3.4}
+us_retail_employment |>
+  model(STL(Employed ~ season(window = 9) + trend(window=50))) |>
+  components() |>
+  autoplot() + labs(title = "STL decomposition: US retail employment")
+```
+
+We can also add the \textbf{robust} option:
+```{r stlwindow93, warning=FALSE, fig.width=8.5, fig.height=3.4}
+us_retail_employment |>
+  model(STL(Employed ~ season(window = 15) + trend(window=15), robust=T)) |>
+  components() |>
+  autoplot() + labs(title = "STL decomposition: US retail employment")
+```
+In this case ``unusual'' observations get downweighted, so potential outliers will not influence the result too much.
+
+
 
 ```{r echo = TRUE, results = 'hide'}
 us_retail_employment |>
@@ -220,13 +229,15 @@ us_retail_employment |>
   components()
 ```
 
-\fontsize{12}{13}\sf
+\textbf{Summary:}
 
-  *  `trend(window = ?)` controls wiggliness of trend component.
-  *  `season(window = ?)` controls variation on seasonal component.
-  *  `season(window = 'periodic')` is equivalent to an infinite window.
+\begin{itemize}
+\item `trend(window = ?)` controls wiggliness of trend component.
+\item `season(window = ?)` controls variation on seasonal component.
+\item `season(window = 'periodic')` is equivalent to an infinite window (i.e. no change over time).
+\end{itemize}
 
-## STL decomposition
+The defaults for STL are already pretty good in most cases:
 
 ```{r mstl, fig.width=8.5, fig.height=3.4}
 us_retail_employment |>
@@ -235,14 +246,11 @@ us_retail_employment |>
   autoplot()
 ```
 
-\only<2>{\begin{textblock}{7}(8,0.2)\fontsize{11}{11}\sf
-\begin{alertblock}{}
-\begin{itemize}\tightlist
+\begin{itemize}
 \item \texttt{STL()} chooses \texttt{season(window=13)} by default
 \item Can include transformations.
 \end{itemize}
-\end{alertblock}
-\end{textblock}}
+
 
 ## STL decomposition
 \fontsize{13}{14.5}\sf
