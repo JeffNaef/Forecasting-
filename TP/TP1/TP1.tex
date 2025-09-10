@@ -1,0 +1,250 @@
+ \documentclass[a4,a4paper,10pt,notitlepage,english]{article}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage{fancyhdr}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{enumerate}
+\usepackage{fancyvrb,moreverb,boxedminipage}
+\usepackage{a4}
+%\usepackage{chicago}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{float}
+\usepackage[english]{babel}
+% \usepackage[french]{babel}
+\usepackage[scaled]{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage[T1]{fontenc}
+\usepackage{bm} % makes pdf look better
+%
+\usepackage[english]{babel}
+\usepackage[pdftex,colorlinks=true,
+pdfstartview=FitV,
+linkcolor=blue,
+citecolor=blue,
+urlcolor=blue]{hyperref}
+%
+\tolerance=1
+\emergencystretch=\maxdimen
+\hyphenpenalty=10000
+\hbadness=10000
+%
+\textwidth=6in
+\textheight=8in
+\topmargin=0.0in
+\oddsidemargin=0in 
+\baselineskip=18pt
+\headheight=2cm
+\pagestyle{fancy}
+%
+\newcommand{\ds}{\displaystyle}
+\newcommand{\bs}[1]{\ensuremath{\boldsymbol{#1}}}
+\renewcommand{\leq}{\leqslant}
+\newenvironment{refer} 
+{
+	\begin{list}
+		{}
+		{
+			\setlength{\labelwidth}{.5em}
+			\setlength{\leftmargin}{0.4cm}
+			\setlength{\itemsep}{0cm}
+		} 
+	}
+	{\end{list}}
+%
+\theoremstyle{definition}
+\newtheorem{exo}{Exercise}
+\newtheorem{sol}{Solution}
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\lhead{GSEM, University of Geneva\\ \textbf{Forecasting with Applications in Business (`S411031')}\\ Prof. Jeffrey N\"af}
+\rhead{Fall Semester 2025 \\ \textbf{Practical 1}\\ Lionel Voirol}
+%
+
+\setlength{\parindent}{0em}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+	
+	\begin{center}
+		\fbox{\Large Introduction to Time Series in \texttt{R}}
+	\end{center}
+	\bigskip
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+	
+	
+	
+	
+	
+	
+	
+\begin{exo}
+    \textbf{Exploration of a built-in \texttt{tsibble} object}\\
+
+    Load the \texttt{tsibble} package (install it if necessary):
+    \begin{verbatim}
+        > install.packages("tsibble")
+        > library(tsibble)
+        > library(dplyr)
+    \end{verbatim}
+
+    Work on the built-in dataset \texttt{PBS} (Pharmaceutical Benefit Scheme):
+    \begin{itemize}
+        \item Inspect the first rows of the dataset.
+        \item Identify the \texttt{index} (time) and \texttt{key} (grouping variables) of the \texttt{tsibble}.
+        \item Find the first and last time points in the dataset.
+        \item Count the number of observations per key (e.g., per ATC1 code).
+    \end{itemize}
+    \smallskip
+    Useful resources:
+    \begin{itemize}
+        \item \href{https://otexts.com/fpp3/tsibbles.html}{\texttt{tsibble} objects in \texttt{fpp3}}
+        \item \href{https://tsibble.tidyverts.org/}{\texttt{tsibble} package documentation}
+    \end{itemize}
+\end{exo}
+
+\bigskip
+
+\begin{exo}
+    \textbf{Creating a \texttt{tsibble} from scratch}\\
+
+    Create a small dataset of monthly sales for two products:
+    \begin{itemize}
+        \item Construct a \texttt{tibble} with columns: \texttt{month}, \texttt{product}, \texttt{sales}.
+        \item Convert the \texttt{tibble} into a \texttt{tsibble}, specifying the \texttt{index} and \texttt{key}.
+        \item Inspect your \texttt{tsibble}.
+        \item Plot sales over time for each product using \texttt{ggplot2}.
+    \end{itemize}
+    \smallskip
+    Hint:
+    \begin{verbatim}
+        sales_tsibble <- sales_data %>%
+          as_tsibble(index = month, key = product)
+    \end{verbatim}
+\end{exo}
+
+\bigskip
+\newpage
+
+\begin{exo}
+    \textbf{Creating a \texttt{tsibble} from an external file: Smartphone Sales}\\
+
+    In this exercise, you will work with a dataset containing monthly sales of two smartphone models.
+    \begin{itemize}
+        \item The file \texttt{smartphone\_sales.csv} contains three columns: \texttt{month}, \texttt{model}, and \texttt{units\_sold}.
+        \item Read the CSV file into R using \texttt{readr::read\_csv()}.
+        \item Convert the dataset into a \texttt{tsibble}, specifying the \texttt{index} (\texttt{month}) and \texttt{key} (\texttt{model}).
+        \item Inspect the tsibble to ensure the time index and keys are correctly set.
+        \item Optional: Plot the monthly sales over time for each model using \texttt{ggplot2}.
+    \end{itemize}
+\end{exo}
+	
+	
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	%%% Exercise 2
+	
+	%The following exercises are adapted from \textbf{\href{https://otexts.com/fpp3/graphics-exercises.html}{Forecasting: Principles and Practice}} book, Chapter 2. 
+	\smallskip
+	\begin{exo} 
+		Time series visualisation. Part 1.
+		\begin{enumerate}
+			\item Use the help function to explore what the object \texttt{gafa\_stock}, \texttt{PBS}, \texttt{vic\_elec} and \texttt{pelt} represent.
+			
+			\begin{enumerate}
+				\item Use autoplot() to plot some of the series in these data sets.
+				\item What is the time interval of each element?
+			\end{enumerate}
+			\item Use filter() to find what days correspond to the peak closing price for each of the four stocks in gafa\_stock.
+			\item The \texttt{USgas} package contains data on the demand for natural gas in the US.
+			
+			\begin{enumerate}
+				\item Install the \texttt{USgas} package.
+				\item Create a tsibble from \texttt{us\_total} with year as the index and state as the key.
+				\item Plot the annual natural gas consumption by state for the New England area (comprising the states of Maine, Vermont, New Hampshire, Massachusetts, Connecticut and Rhode Island).
+				\item Comment on your findings
+			\end{enumerate}
+			
+		\end{enumerate}
+	\end{exo}
+	\bigskip
+	
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	%%% Exercise 3
+	
+	\begin{exo} 
+		Time series visualisation. Part 2.
+		\begin{enumerate}
+			\item Create time plots of the following four time series: Bricks from \texttt{aus\_production}, Lynx from \texttt{pelt}, Close from \texttt{gafa\_stock}, Demand from \texttt{vic\_elec}.
+			\begin{enumerate}
+				\item Use ? (or help()) to find out about the data in each series.
+				\item Modify the axis labels and titles if needed.
+				\item Can you identify any unusual observations?
+			\end{enumerate}
+			\item What can you conclude? Provide detailed comment on each time series based on your plots.
+		\end{enumerate}
+		
+		
+	\end{exo}
+	
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	%%% Exercise 5
+	
+	%\begin{exo}
+	%Time series decomposition
+	
+	%Consider the last five years of the Gas data from aus\_production.
+	
+	%gas <- tail(aus\_production, 5*4) |> select(Gas)
+	%\begin{enumerate}
+	%\item Plot the time series. Can you identify seasonal fluctuations and/or a trend-cycle?
+	%\item Use classical\_decomposition with type=multiplicative to calculate the trend-cycle and seasonal indices.
+	%\item Do the results support the graphical interpretation from part a?
+	%\item Compute and plot the seasonally adjusted data.
+	%\item Change one observation to be an outlier (e.g., add 300 to one observation), and recompute the seasonally adjusted data. What is the effect of the outlier?
+	%\item Does it make any difference if the outlier is near the end rather than in the middle of the time series?
+	
+	%\end{enumerate}
+	%\end{exo}
+	
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	%%% Exercise 6
+	%\begin{exo}
+	%\begin{enumerate}
+	
+	%\item Recall your retail time series data (from Exercise 8 in Section 2.10). Decompose the series using X-11. Does it reveal any outliers, or unusual features that you had not noticed previously?
+	
+	%\end{enumerate}
+	%\end{exo}
+	%\bigskip
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	%%% Exercise 4
+	%\begin{exo}
+	%Dependance in Time Series, ACF and PACF plot
+	%\begin{itemize}
+	%\item Read the chapter 2.3 and 3.1 in the book \textbf{\href{https://smac-group.github.io/ts/}{Applied Time Series Analysis with R}}.
+	%\item Read the chapter 2.8 in the book \textbf{\href{https://otexts.com/fpp2}{Forecasting: Principles and Practice}}.
+	%\item Read the following article \textbf{\href{https://towardsdatascience.com/significance-of-acf-and-pacf-plots-in-time-series-analysis-2fa11a5d10a8}{Significance of ACF and PACF Plots In Time Series Analysis}} in the online publication \textit{Towards Data Science}
+	%\item Simulate AR(p) and MA(p) processes using previously used \texttt{simts} package and plot the corresponding ACF and PACF plot. Be sure to understand the impact of the order p of the process and the changes in the corresponding ACF and PACF plots.
+	%\end{itemize}
+	%\end{exo}
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\end{document}
+
+
+
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+	%%% Exercise 4
+	\begin{exo}
+		Time Series decomposition\\
+		
+		In the online book \textbf{\href{https://otexts.com/fpp3/components.html}{Forecasting: Principles and Practice}}, within the 'Time series decomposition' section, read the following:
+		\begin{itemize}
+			\item Chapter 3.2 about 'Time Series components'
+			\item Chapter 3.3 about 'Moving averages'
+			\item Chapter 3.4 about 'Classical decomposition'
+			\item Chapter 3.6 about 'STL decomposition'
+		\end{itemize}
+	\end{exo}
+	\bigskip

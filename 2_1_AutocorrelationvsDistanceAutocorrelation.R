@@ -1,6 +1,6 @@
 # Distance Autocorrelation vs Traditional Autocorrelation Demo
 # Install required packages if needed
-# install.packages(c("dCovTS", "forecast"))
+install.packages(c("patchwork", "dCovTS", "doSNOW"))
 
 library(patchwork)
 library(dCovTS)
