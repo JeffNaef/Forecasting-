@@ -1,0 +1,189 @@
+ \documentclass[a4,a4paper,10pt,notitlepage,english]{article}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\usepackage{fancyhdr}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{enumerate}
+\usepackage{fancyvrb,moreverb,boxedminipage}
+\usepackage{a4}
+%\usepackage{chicago}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{float}
+\usepackage[english]{babel}
+% \usepackage[french]{babel}
+\usepackage[scaled]{helvet}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage[T1]{fontenc}
+\usepackage{bm} % makes pdf look better
+%
+\usepackage[english]{babel}
+\usepackage[pdftex,colorlinks=true,
+pdfstartview=FitV,
+linkcolor=blue,
+citecolor=blue,
+urlcolor=blue]{hyperref}
+%
+\tolerance=1
+\emergencystretch=\maxdimen
+\hyphenpenalty=10000
+\hbadness=10000
+%
+\textwidth=6in
+\textheight=8in
+\topmargin=0.0in
+\oddsidemargin=0in 
+\baselineskip=18pt
+\headheight=2cm
+\pagestyle{fancy}
+%
+\newcommand{\ds}{\displaystyle}
+\newcommand{\bs}[1]{\ensuremath{\boldsymbol{#1}}}
+\renewcommand{\leq}{\leqslant}
+\newenvironment{refer} 
+{
+	\begin{list}
+		{}
+		{
+			\setlength{\labelwidth}{.5em}
+			\setlength{\leftmargin}{0.4cm}
+			\setlength{\itemsep}{0cm}
+		} 
+	}
+	{\end{list}}
+%
+\theoremstyle{definition}
+\newtheorem{exo}{Exercise}
+\newtheorem{sol}{Solution}
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\lhead{GSEM, University of Geneva\\ \textbf{Forecasting with Applications in Business (`S411031')}\\ Prof. Jeffrey N\"af}
+\rhead{Fall Semester 2025 \\ \textbf{Practical 2}\\ Lionel Voirol}
+%
+
+\setlength{\parindent}{0em}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+	
+	\begin{center}
+\fbox{%
+  \parbox{0.9\linewidth}{\centering\Large
+    Autocovariance, Autocorrelation, \\
+    Distance Autocovariance and Distance Autocorrelation
+  }%
+}
+\end{center}
+	\bigskip
+	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+	
+	
+\textbf{Recall.} 
+Let $\{X_t\}_{t \in \mathbb{Z}}$ be a stochastic process with mean $\mu = \mathbb{E}[X_t]$ 
+and variance $\sigma^2 = \mathbb{V}[X_t]$ (assumed finite).
+
+\begin{itemize}
+  \item \textbf{Covariance between two time points:} For any two times $i,j$, the covariance is
+  \[
+    \operatorname{Cov}(X_i, X_j) = \mathbb{E}\!\big[ (X_i - \mu)(X_j - \mu) \big].
+  \]
+  This measures the linear dependence between the values of the process at times $i$ and $j$.
+
+  \item \textbf{Autocovariance as a function of lag:} If the process is (weakly) stationary, the covariance 
+  depends only on the \emph{lag} $h = j-i$, not on the absolute time:
+  \[
+    \gamma(h) = \operatorname{Cov}(X_t, X_{t+h}) 
+    = \mathbb{E}\!\big[ (X_t - \mu)(X_{t+h} - \mu) \big], \quad t \in \mathbb{Z}.
+  \]
+  In this case, we simply refer to it as the \emph{autocovariance at lag $h$}.
+
+  \item The \emph{autocorrelation function} at lag $h$ is
+  \[
+    \rho(h) = \frac{\gamma(h)}{\gamma(0)}.
+  \]
+
+  \item Given observations $X_1, \dots, X_n$, the \emph{plug-in estimator} 
+  of the autocovariance is
+  \[
+    \hat{\gamma}(h) = \frac{1}{n} \sum_{t=1}^{n-h} 
+    (X_t - \bar{X})(X_{t+h} - \bar{X}), 
+    \quad \bar{X} = \frac{1}{n} \sum_{t=1}^n X_t,
+  \]
+  and the empirical autocorrelation is
+  \[
+    \hat{\rho}(h) = \frac{\hat{\gamma}(h)}{\hat{\gamma}(0)}.
+  \]
+\end{itemize}
+
+
+	
+	\begin{exo}
+    \textbf{Autocovariance and autocorrelation of White Noise}\\
+
+
+
+
+  
+    \begin{itemize}
+    \item     Simulate a white noise process $X_t \sim \mathcal{N}(0,5^2)$ of length $n=500$.
+    \item Plot the generated time series.
+        \item Compute the empirical autocovariance $\hat{\gamma}(h)$ and autocorrelation $\hat{\rho}(h)$
+        for lags $h=0,1, \ldots n-1$ manually and using \texttt{R} function \texttt{acf()}.
+        \item Derive the theoretical autocovariance and autocorrelation function of the process.
+        \item Compare the empirical and theoretical obtained values.
+    \end{itemize}
+\end{exo}
+
+\bigskip
+
+\begin{exo}
+    \textbf{Autocovariance and autocorrelation of an AR(1) process}\\
+
+    Consider the AR(1) model:
+    \[
+    X_t = 0.7 X_{t-1} + \varepsilon_t, \quad \varepsilon_t \sim \mathcal{N}(0,2^2).
+    \]
+
+    \begin{itemize}
+    \item Simulate a trajectory of length $n=500$
+ \item Plot the generated time series.         
+         \item Compute the empirical autocovariance $\hat{\gamma}(h)$ and autocorrelation $\hat{\rho}(h)$
+        for lags $h=0,1, \ldots n-1$ manually and using \texttt{R} function \texttt{acf()}.
+        \item Derive the theoretical autocovariance and autocorrelation function of the process.
+        \item Compare the empirical and theoretical obtained values.
+  
+    \end{itemize}
+\end{exo}
+
+\bigskip
+
+
+\begin{exo}
+    \textbf{Autocovariance and autocorrelation of an MA(1) process}\\
+
+    Consider the MA(1) model:
+    \[
+    X_t = \varepsilon_t + 0.5 \varepsilon_{t-1}, \quad \varepsilon_t \sim \mathcal{N}(0,2^2).
+    \]
+
+
+
+
+    \begin{itemize}
+    \item    Simulate a trajectory of length $n=500$.
+     \item Plot the generated time series.
+        \item Compute the empirical autocovariance $\hat{\gamma}(h)$ and autocorrelation $\hat{\rho}(h)$
+        for lags $h=0,1, \ldots n-1$ manually and using \texttt{R} function \texttt{acf()}.
+        \item Derive the theoretical autocovariance and autocorrelation function of the process.
+        \item Compare the empirical and theoretical obtained values.
+    \end{itemize}
+\end{exo}
+
+\bigskip
+
+
+
+\end{document}
+
