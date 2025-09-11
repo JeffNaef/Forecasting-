@@ -1,6 +1,6 @@
 # Distance Autocorrelation vs Traditional Autocorrelation Demo
 # Install required packages if needed
-install.packages(c("patchwork", "dCovTS", "doSNOW"))
+# install.packages(c("patchwork", "dCovTS", "doSNOW"))
 
 library(patchwork)
 library(dCovTS)
@@ -38,7 +38,7 @@ for(i in 2:n) {
 alpha0 <- 0.1
 alpha1 <- 0.8
 sigma2 <- numeric(n)
-y3_arch <- numeric(n)
+y3 <- numeric(n)
 
 sigma2[1] <- alpha0 / (1 - alpha1)  # Unconditional variance
 y3[1] <- sqrt(sigma2[1]) * rnorm(1)
