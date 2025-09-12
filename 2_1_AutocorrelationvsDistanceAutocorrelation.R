@@ -83,3 +83,4 @@ cat("- Sine series: Distance ACF =", round(dcor_result2[2], 3),
     "vs Traditional ACF =", round(acf_result2$acf[2], 3), "\n")
 cat("- ARCH series: Distance ACF =", round(dcor_result3[2], 3), 
     "vs Traditional ACF =", round(acf_result3$acf[2], 3), "\n")
+

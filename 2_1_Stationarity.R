@@ -1,6 +1,7 @@
 # Illustrating Strong and Weak Stationarity Concepts
 # Load required libraries
 library(ggplot2)
+# install.packages("gridExtra")
 library(gridExtra)
 library(dplyr)
 
@@ -59,6 +60,8 @@ p1 <- ggplot(segment_data, aes(x = time, y = value, color = segment)) +
   theme(legend.position = "none",
         strip.text = element_text(size = 10))
 
+p1
+
 # Plot 2: Histograms showing distributional similarity
 p2 <- ggplot(segment_data, aes(x = value, fill = segment)) +
   geom_histogram(alpha = 0.7, bins = 15, position = "identity") +
@@ -68,6 +71,11 @@ p2 <- ggplot(segment_data, aes(x = value, fill = segment)) +
        x = "Value", y = "Frequency") +
   theme_minimal() +
   theme(legend.position = "none")
+
+
+p2
+
+
 
 # ============================================================================
 # WEAK STATIONARITY ILLUSTRATION
@@ -157,6 +165,10 @@ p4 <- ggplot(autocov_data, aes(x = lag, y = autocovariance, color = realization)
   theme_minimal() +
   theme(legend.position = "bottom")
 
+p3
+p4
+
+
 # ============================================================================
 # COMPARISON: NON-STATIONARY PROCESS
 # ============================================================================
@@ -186,6 +198,9 @@ p5 <- ggplot(comparison_data, aes(x = time, y = value, color = process)) +
   theme(legend.position = "none",
         strip.text = element_text(size = 12))
 
+
+p5
+
 # Display all plots
 print("=== STRONG STATIONARITY ===")
 print(p1)
@@ -211,3 +226,4 @@ cat("\nTheoretical values for AR(1) with φ =", phi, ":\n")
 cat(sprintf("Mean = 0 (exact)\n"))
 cat(sprintf("Variance = %.3f\n", 1/(1-phi^2)))
 cat(sprintf("First-order autocorrelation = %.3f\n", phi))
+
