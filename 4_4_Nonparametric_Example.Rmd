@@ -14,6 +14,7 @@ library(gridExtra)
 library(seasonal)
 library(astsa)
 library(fpp3)
+library(MASS)
 
 # Set seed for reproducibility
 set.seed(1)
@@ -32,9 +33,7 @@ fit <- us_change |>
 glance(fit)
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
 
 ```{r pressure, echo=FALSE}
 fit |>
@@ -43,7 +42,6 @@ fit |>
   autoplot()
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
 
 
 ```{r}
@@ -74,6 +72,7 @@ dCovTS::mADCFplot(Yall)
 X<-as.matrix(Yall[1:(n-1),])
 Y<-as.matrix(Yall[2:n,])
 
+H<-10
 
 fit<-drfown(X=X, Y=Y)
 
@@ -105,6 +104,24 @@ colnames(Ypred[[1]])<-colnames(Yall)
 
 ### Continue here!!!
 
+h <- length(Ypred)  # forecast horizon
+last_period <- max(us_change$Quarter)  # get last period from your data
+forecast_periods <- seq(last_period, by = "quarter", length.out = h + 1)[-1]
+
+# Convert Ypred to a fable (forecast table)
+forecast_df <- tibble(
+  Quarter = forecast_periods,
+  .model = "DRF",  # or whatever model name you prefer
+  Consumption = map(Ypred, ~distributional::dist_sample(list(.[,1]))),
+  Income = map(Ypred, ~distributional::dist_sample(list(.[,2])))
+) %>%
+  as_fable(key = .model, index = Quarter, 
+           response = c("Consumption", "Income"), 
+           distribution = c("Consumption", "Income"))
+
+# Create the prediction plot
+forecast_df %>%
+  autoplot(us_change %>% filter(year(Quarter) > 2010))
 
 
 
