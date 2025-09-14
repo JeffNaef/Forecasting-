@@ -28,7 +28,7 @@ empirical_autocor <- function(x, lag.max = 20) {
 # Theoretical distance correlation for standard normals (Székely et al. 2007)
 theoretical_dcor_normal <- function(rho) {
   # rho = correlation
-  (rho * asin(rho) + sqrt(1 - rho^2) - 0.5 * rho * asin(rho/2) - sqrt(4 - rho^2) + 1) /
+  (rho * asin(rho) + sqrt(1 - rho^2) -  rho * asin(rho/2) - sqrt(4 - rho^2) + 1) /
     (1 + pi/3 - sqrt(3))
 }
 
