@@ -43,7 +43,7 @@ acf(X, type = "covariance", main = "Empirical Autocovariance Function", col = "r
 
 
 
-# ---------------- consider a weak stationary but not strong stationary process
+# ---------------- Exercise 2: consider a weak stationary but not strong stationary process
 
 
 set.seed(12345)
@@ -91,7 +91,7 @@ plot(0:lag_max, emp_gamma, type='h', main="Empirical autocovariance function",
      xlab="lag h", ylab="Cov(X_t, X_{t+h})")
 
 
-# --------------- random walk
+# ---------------Exercise 3: random walk
 set.seed(12345)
 
 n <- 500      # number of time points
