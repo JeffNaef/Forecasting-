@@ -289,6 +289,11 @@ us_tsibble |>
 
 
 
+
+
+# ------------------------------------------ Exercise 5
+
+
 ?aus_production
 data("aus_production")
 colnames(aus_production)
@@ -366,4 +371,9 @@ vic_elec[350:1900, ] |>
     title = "Half-hourly electricity demand",
     subtitle = "Victoria, Australia"
   )
+
+
+
+
+
 
