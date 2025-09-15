@@ -1,5 +1,5 @@
 ---
-title: "Untitled"
+title: "Plotting Time Series"
 output: html_document
 date: "2025-07-31"
 ---
@@ -73,17 +73,22 @@ a10 |>
   autoplot(Cost) + 
   geom_point()
 ```
+
+
 The plot clearly indicates that there are regular spikes at some month each year. These spikes are then followed by a downturn. There also seems to be a nonlinear trend where the cost is increasing over time. Moreover, the difference between spike and downturn increases over time! This is in fact a typical \emph{multiplicative} pattern
 
 
 ## Ansett airlines
-\fontsize{10}{10}\sf
+
+We now consider several ($n$) time series, in the form of different airports + classes:
+
 
 ```{r}
 ansett |>
   autoplot(Passengers)
 ```
 
+We now consider only the $n=10$ time series of the economy class.
 
 \fontsize{10}{10}\sf
 
@@ -94,8 +99,7 @@ ansett |>
   autoplot(Passengers)
 ```
 
-
-\fontsize{10}{10}\sf
+Instead we can also filter for the routes MEL-SYD $(n=3)$:
 
 ```{r}
 # Only look at one route
@@ -103,9 +107,10 @@ ansett |>
   filter(Airports == "MEL-SYD") |>
   autoplot(Passengers)
 ```
+
 Note the zeros in all three time series! These were strikes. Also there is an interesting period where some of the Economy class was replaced by business class, so that one goes down the other goes up.
 
-\fontsize{10}{10}\sf
+
 
 ```{r echo=FALSE, fig.height=3.8}
 ansett |>
@@ -116,45 +121,29 @@ ansett |>
        y = "Passengers ('000)")
 ```
 
-\only<2->{\begin{textblock}{.75}(2.15,3.7)
-\begin{alertblock}{}\fontsize{10}{10}\sf Index\phantom{dg}\end{alertblock}
-\end{textblock}}
-\only<3->{\begin{textblock}{1.6}(3.28,3.7)
-\begin{alertblock}{}\fontsize{10}{10}\sf Key\phantom{dg}\end{alertblock}
-\end{textblock}}
-\only<4>{\begin{textblock}{6.7}(5.5,3.7)
-\begin{alertblock}{}\fontsize{10}{10}\sf Measured variables\phantom{dg}\end{alertblock}
-\end{textblock}}
-
-
-
 
 
 
 
 # 2. Time series patterns
 
-\textbf{Trend}
-  : pattern exists when there is a long-term increase or decrease in the data.
+\textbf{Trend}: pattern exists when there is a long-term increase or decrease in the data.
+  
+  
+\textbf{Cyclic}: pattern exists when data exhibit rises and falls that are \emph{not of fixed period} (duration usually of at least 2 years, e.g. business cycle).
 
-\textbf{Seasonal}
-  : pattern exists when a series is influenced by seasonal factors (e.g., the quarter of the year, the month, or day of the week). Big Example: Spikes of sales during Christmas.
+\textbf{Seasonal}: pattern exists when a series is influenced by seasonal factors (e.g., the quarter of the year, the month, or day of the week). Big Example: Spikes of sales during Christmas.
 
-\textbf{Cyclic}
-  : pattern exists when data exhibit rises and falls that are \emph{not of fixed period} (duration usually of at least 2 years, e.g. business cycle).
 
 ## Time series components
 
 \textbf{Differences between seasonal and cyclic patterns:}
 
-* seasonal pattern constant length; cyclic pattern variable length
-* average length of cycle longer than length of seasonal pattern
-* magnitude of cycle more variable than magnitude of seasonal pattern
+- seasonal pattern constant length; cyclic pattern variable length
+- average length of cycle longer than length of seasonal pattern
+- magnitude of cycle more variable than magnitude of seasonal pattern
 
-  
-
-
-\fontsize{9}{9}\sf
+Consider the following example of Australian electricity production:
 
 ```{r}
 aus_production |>
@@ -162,11 +151,11 @@ aus_production |>
   autoplot(Electricity) +
   labs(y = "GWh", title = "Australian electricity production")
 ```
-Clearly there is a long term increase (i.e. trend). There is a clear seasonal component with regular peaks every 4 observations.
+Clearly there is a long term increase (i.e. trend). There is a clear seasonal component with regular peaks every 4 observations. Note that it would not have been necessary to check the plot for this, these features are pretty obvious for electricity data (expert knowledge).
 
-Note that it would not have been necessary to check the plot for this, these features are pretty obvious for electricity data (expert knowledge)
+Let's consider another example:
 
-\fontsize{9}{9}\sf
+
 
 ```{r, warning=FALSE}
 aus_production |>
@@ -175,8 +164,8 @@ aus_production |>
 ```
 For the first half, there is a strong increasing trend in brick production. Then there are two big busts/recessions. There is also a clear cyclical component.
 
+Another Example concerns Retail Employment:
 
-\fontsize{9}{9}\sf
 
 ```{r}
 us_employment |>
@@ -186,7 +175,7 @@ us_employment |>
 ```
 Strong seasonal patterns plus trend. There is however also a cyclical component with strong increases and cycles of slowdowns.
 
-\fontsize{9}{9}\sf
+Similar patterns occur in stock prices:
 
 ```{r}
 gafa_stock |>
@@ -194,9 +183,9 @@ gafa_stock |>
   autoplot(Close) +
   labs(y = "$US", title = "Amazon closing stock price")
 ```
-This is financial data, which is generally somewhat special, we will treat this in later contexts (e.g. random walks).
+However financial data is generally somewhat special, we will treat this in later contexts (e.g. random walks).
 
-\fontsize{9}{9}\sf
+Another, more regular example is the annual number of Lynx trapped in Canada:
 
 ```{r}
 pelt |>
@@ -210,14 +199,16 @@ There is a clear cycle here (over several years), which corresponds to the lifec
 
 \textbf{Differences between seasonal and cyclic patterns:}
 
-  * seasonal pattern constant length; cyclic pattern variable length
-  * average length of cycle longer than length of seasonal pattern
-  * magnitude of cycle more variable than magnitude of seasonal pattern
+- seasonal pattern constant length; cyclic pattern variable length
+- average length of cycle longer than length of seasonal pattern
+- magnitude of cycle more variable than magnitude of seasonal pattern
 
 
 \textbf{The timing of peaks and troughs is predictable with seasonal data, but unpredictable in the long term with cyclic data.}
 
 # 3. Seasonal Plots 
+
+We now consider examples of how to analyse seasonality with plots,
 
 ```{r}
 PBS |>
@@ -248,10 +239,10 @@ Now the data is plotted per year agains the month (Season=Month here). We can cl
 
 \textbf{Seasonal Plots}
 
-  * Data plotted against the individual "seasons" in which the data were observed.  (In this case a "season" is a month.)
-  * Something like a time plot except that the data from each season are overlapped.
-  * Enables the underlying seasonal pattern to be seen more clearly, and also allows any substantial departures from the seasonal pattern to be easily identified.
-  * In R: `gg_season()`
+- Data plotted against the individual "seasons" in which the data were observed.  (In this case a "season" is a month.)
+- Something like a time plot except that the data from each season are overlapped.
+- Enables the underlying seasonal pattern to be seen more clearly, and also allows any substantial departures from the seasonal pattern to be easily identified.
+- In R: `gg_season()`
 
 ## Quarterly Australian Beer Production
 
@@ -261,6 +252,8 @@ beer <- aus_production |>
 beer |> autoplot(Beer) + 
   labs(title = "Australian beer production", y = "Megalitres") 
 ```
+
+
 Again we see highly seasonal data (production increases at the beginning of summer). However its hard to identify from this plot in which quarter the spike actually happens.
 
 \fontsize{9}{9}\sf
@@ -276,6 +269,8 @@ beer |> autoplot(Beer) + geom_point() +
 ```{r}
 beer |> gg_season(Beer, labels = "right")
 ```
+
+
 Now in this plot, we can clearly see the spike happening in Q4! There also seems to be a certain downward trend, though 2004 appears to be an outlier! (Ask for expert knowledge here if possible)
 
 
@@ -285,6 +280,8 @@ Now in this plot, we can clearly see the spike happening in Q4! There also seems
 ```{r}
 vic_elec
 ```
+
+
 Here we have a dummy variable that signals if we have a holiday or not!
 
 \fontsize{9}{9}\sf
@@ -299,6 +296,8 @@ vic_elec |> autoplot()
 ```{r, dev = "png", dpi = 180}
 vic_elec |> gg_season(Demand)
 ```
+
+
 Interestingly demans seems to be higher in the first few months, which are the summer months in Australia. There is also a somewhat higher demand in the middle months, which is winter. While this is nice, this plot actually gives us not that much more information compared to the original time plot. Let us try to plot against \emph{days} instead of years.
 
 
@@ -310,6 +309,8 @@ Here we see that the weekend demand appears to be lower than the weekday demand.
 ```{r, dev = "png", dpi = 180}
 vic_elec |> gg_season(Demand, period = "day")
 ```
+
+
 Between midnight and 4am there is lowest demand. Then people wake up and demand increases, during the day demand slows down before picking up again during 6 pm. There are 3 days which have extra observations, which arise because of daylight saving time. 
 
 #3. Seasonal Subseries Plots
@@ -344,13 +345,15 @@ a10 |>
   gg_subseries(Cost) +
   labs(y = "$ million", title = "Subseries plot: antidiabetic drug sales")
 ```
+
+
 Here we extract all the data for a given month (i.e. January) and plot them in separate plots. Blue lines are the average (monthly) values. Again January tends to have the higest values with a drop in February.
 
 \textbf{Subseries Plots}
 
-  * Data for each season collected together in time plot as separate time series.
-  * Enables the underlying seasonal pattern to be seen clearly, and changes in seasonality over time to be visualized.
-  * In R: `gg_subseries()`
+- Data for each season collected together in time plot as separate time series.
+- Enables the underlying seasonal pattern to be seen clearly, and changes in seasonality over time to be visualized.
+- In R: `gg_subseries()`
 
 ## Quarterly Australian Beer Production
 
@@ -366,6 +369,8 @@ beer |> autoplot(Beer)
 ```{r}
 beer |> gg_subseries(Beer)
 ```
+
+
 Again we can see that Q4 is the highest quarter of demand! Now however we can see that the decreasing trend in the overall series is arising from Q4 demand going down!
 
 
@@ -378,7 +383,6 @@ holidays <- tourism |>
   summarise(Trips = sum(Trips))
 ```
 
-\fontsize{10}{10}\sf
 
 ```{r, echo=FALSE}
 holidays
@@ -392,7 +396,6 @@ holidays |> autoplot(Trips) +
 ```
 We can again see strong seasonal components across all states. There is also an increasing trend in some states after 2010.
 
-## Seasonal plots
 
 ```{r graphics1}
 holidays |> gg_season(Trips) + 
@@ -401,8 +404,7 @@ holidays |> gg_season(Trips) +
 ```
 The seasonality plots, ordered by state, we can actually see that the seasonality is very different for different states. This has to do with the weather situation in the different states of Australia. For instance NT, peak demand is in the winter quarter in Australia.
 
-
-## Seasonal subseries plots
+We can also consider the subseries plots:
 
 ```{r graphics2, fig.height=3.1}
 holidays |>
@@ -458,6 +460,9 @@ vic_elec_day_type |>
   geom_point() + 
    labs(x = "Temperature (degrees Celsius)", y = "Electricity demand (GW)")
 ```
+
+
+
 There seems to be a nonlinear relationship between the two variables, where on the left hand-side heating is responsible for the electricty demand, while on the right side of the plot it is air conditioning that seem to drive demand.
 
 
@@ -467,6 +472,7 @@ vic_elec_day_type |>
   geom_point() + 
    labs(x = "Temperature (degrees Celsius)", y = "Electricity demand (GW)")
 ```
+
 
 Split up between Holidays/Weekdays and Weekend. This reveals lower demands for the weekend, but with the same shape of demand. Moreover, Holiday days seem to behave similarly to weekends.
 
@@ -550,6 +556,8 @@ us_change |> GGally::ggpairs(columns = 2:6,
                              upper = list(continuous = dcor_fun))
 
 ```
+
+
 In this case there is no negative or positive correlation simply a number between 0 and 1 indicating the strength of the relationship between two variables. For instance, while the correlation between savings and production appears close to zero (-0.059), the distance correlation actually reveals some (nonlinear) relationship.
 
 
@@ -571,7 +579,7 @@ new_production
 new_production |> gg_lag(Beer, geom = "point")
 ```
 
-Each graph shows $y_t$ plotted against $y_{t-k}$ for different values of $k$. First plot plots $y_t$ again $y_{t-1}$, second plot $y_t$ again $y_{t-2}$ and so on. Note that for lag 4, we plot Q4 of this year against Q4 of the previous year (4 quarters lag). Since this data has strong seasonality (values in Q4 this year tend to be strongly related to values in Q4 of the previous year) we observe a strong relationship.
+Each graph shows $Y_t$ plotted against $Y_{t-k}$ for different values of $k$. First plot plots $Y_t$ again $Y_{t-1}$, second plot $Y_t$ again $Y_{t-2}$ and so on. Note that for lag 4, we plot Q4 of this year against Q4 of the previous year (4 quarters lag). Since this data has strong seasonality (values in Q4 this year tend to be strongly related to values in Q4 of the previous year) we observe a strong relationship.
 
 
 
@@ -581,12 +589,11 @@ new_production |> gg_lag(Beer)
 ```
 
 
-Each graph shows $y_t$ plotted against $y_{t-k}$ for different values of $k$. This time with lines instead of points, showing the time ordering. In this case, this doesn't really add information.
+Each graph shows $Y_t$ plotted against $Y_{t-k}$ for different values of $k$. This time with lines instead of points, showing the time ordering. In this case, this doesn't really add information.
 
 
 
 # 7. Autocorrelation
-## TO DO: ADD Example of distance autocorrelation
 
 One of the key tools to understand a time series.
 
