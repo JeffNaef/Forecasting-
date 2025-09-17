@@ -478,10 +478,10 @@ Split up between Holidays/Weekdays and Weekend. This reveals lower demands for t
 
 ## Correlation coefficient
 
-Measures the extent of a linear relationship between two variables ($y$ and $x$).
+Measures the extent of a linear relationship between two variables ($Y$ and $X$).
 \vspace{0.4cm}
 
-- $r=\frac{\sum_{t=1}^T(y_t-\bar{y})(x_t-\bar{x})}{\sqrt{\sum_{t=1}^T(y_t-\bar{y})^2} \sqrt{\sum_{t=1}^T(x_t-\bar{x})^2}}$
+- $r=\frac{\sum_{t=1}^T(Y_t-\bar{Y})(X_t-\bar{X})}{\sqrt{\sum_{t=1}^T(Y_t-\bar{Y})^2} \sqrt{\sum_{t=1}^T(X_t-\bar{X})^2}}$
 
 
 \begin{itemize}
@@ -611,33 +611,32 @@ new_production |> gg_lag(Beer, geom = "point")
 
 
 \begin{itemize}\tightlist
-\item Each graph shows $y_t$ plotted against $y_{t-k}$ for
+\item Each graph shows $Y_t$ plotted against $Y_{t-k}$ for
 different values of $k$.
 \item The autocorrelations are the correlations associated
 with these scatterplots.
-\item $r_1=\text{Correlation}(y_{t}, y_{t-1})$
-\item $r_2=\text{Correlation}(y_{t}, y_{t-2})$
-\item $r_3=\text{Correlation}(y_{t}, y_{t-3})$ \\ \hspace*{0.5cm} $\vdots$
+\item $\rho(t,t-1)=\text{Correlation}(Y_{t}, Y_{t-1})$
+\item $\rho(t,t-2)=\text{Correlation}(Y_{t}, Y_{t-2})$
+\item $\rho(t,t-3)=\text{Correlation}(Y_{t}, Y_{t-3})$ \\ \hspace*{0.5cm} $\vdots$
 \end{itemize}
 
 
 ## Autocorrelation
 
-We denote the sample autocovariance at lag $k$ by $c_k$ and the sample autocorrelation at lag $k$ by $r_k$.  Then define
-
+Under weak stationarity the autocovariance, $\gamma(s,t) = \text{Cov}(Y_s, Y_t)$ only depence on the difference $h=|s-t|$. As such we shorten this to $\gamma(h)$ and similarly we denote the autocorrelation function as $\rho(h)$. They are then estimated as:
 
 \begin{align*}
-c_h &= \frac{1}{T}\sum_{t=h+1}^T (y_t-\bar{y})(y_{t-h}-\bar{y}) \\[0.cm]
+\hat{\gamma}(h) &= \frac{1}{T}\sum_{t=h+1}^T (Y_t-\bar{Y})(Y_{t-h}-\bar{Y}) \\[0.cm]
 \text{and}\qquad
-r_{h} &= c_h/c_0
+\hat{\rho}(h) &= \hat{\gamma}(h)/\hat{\gamma}(0)
 \end{align*}
 
 
 
 
-  * $r_1$ indicates how successive values of $y$ relate to each other
-  * $r_2$ indicates how $y$ values two periods apart relate to each other
-  * $r_k$ is \textit{almost} the same as the sample correlation between $y_t$ and $y_{t-k}$.
+  * $\hat{\rho}(1)$ indicates how successive values of $Y_t$ relate to each other
+  * $\hat{\rho}(2)$ indicates how $Y_t$ values two periods apart relate to each other
+  * $\hat{\rho}(k)$ is \textit{almost} the same as the sample correlation between $Y_t$ and $Y_{t-k}$.
 
 
 
@@ -657,6 +656,7 @@ Results for first 9 lags for beer data:
 ```{r beeracf, fig.height=1.8}
 new_production |> ACF(Beer, lag_max = 9) |> autoplot()
 ```
+
 Plot of the correlation for different lags, with confidence bands. These confidence bands are not simultaneous, so even if all lags are truly zero, we would expect around $5\%$ of values to fall outside. Again we see the strong correlation at lag 4 and 8, showing the seasonal pattern.
 
 
@@ -675,8 +675,8 @@ Plot of the correlation for different lags, with confidence bands. These confide
 new_production |> ACF(Beer) |> autoplot()
 ```
 
-  * $r_{4}$  higher than for the other lags due to **the seasonal pattern in the data**: peaks tend to be **4 quarters** apart and troughs tend to be **4 quarters** apart.
-  * $r_2$ is more negative than for the other lags because troughs tend to be 2 quarters behind peaks.
+  * $\hat{\rho}(4)$  higher than for the other lags due to **the seasonal pattern in the data**: peaks tend to be **4 quarters** apart and troughs tend to be **4 quarters** apart.
+  * $\hat{\rho}(2)$ is more negative than for the other lags because troughs tend to be 2 quarters behind peaks.
 
 
 
@@ -829,9 +829,9 @@ wn |>
 
 ## \large Sampling distribution of autocorrelations
 
-Sampling distribution of $r_k$ for white noise data is asymptotically N(0,$1/T$).\pause
+Sampling distribution of $\hat{\rho}(k)$ for white noise data is asymptotically N(0,$1/T$).\pause
 
-  *  95% of all $r_k$ for white noise must lie within $\pm 1.96/\sqrt{T}$.
+  *  95% of all $\hat{\rho}(k)$ for white noise must lie within $\pm 1.96/\sqrt{T}$.
   * If this is not the case, the series is probably not WN.
   * Common to plot lines at $\pm 1.96/\sqrt{T}$ when plotting ACF.
 These are the \emph{critical values}.
