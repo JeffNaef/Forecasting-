@@ -68,6 +68,220 @@ In summary:
 
 ## Fit and Predict an AR(1) model on data
 
+We now implement an AR(1) model from scratch, touching on several things we will see later in the course. First we define the likelihood as in the slides:
+
+```{r}
+  # Conditional log-likelihood function
+  # L(phi, sigma^2) = product of N(phi * y_{t-1}, sigma^2) for t = 2, ..., n
+  log_likelihood <- function(params, y) {
+    n<-length(y)
+    phi <- params[1]
+    log_sigma <- params[2]  # log(sigma) for numerical stability
+    sigma <- exp(log_sigma)
+    
+    # Conditional mean: phi * Y_{t-1}
+    mu <- phi * y[1:(n-1)]
+    
+    # Log-likelihood: sum of log-densities
+    ll <- sum(dnorm(y[2:n], mean = mu, sd = sigma, log = TRUE))
+    
+    return(-ll)  # Return negative for minimization
+  }
+```
+
+Now we can optimize this likelihood over the data:
+
+```{r}
+fit_ar1 <- function(y) {
+  n <- length(y)
+  # Optimize
+  result <- optim(par = c(0, 0), fn = log_likelihood, y=y, method = "BFGS")
+  
+  phi_hat <- result$par[1]
+  sigma_hat <- exp(result$par[2])
+  
+  return(list(
+    phi = phi_hat,
+    sigma = sigma_hat,
+    loglik = -result$value,
+    convergence = result$convergence
+  ))
+}
+```
+
+Let's apply this to the differenced google data:
+
+```{r}
+# Example Usage with Google data
+
+# Fit AR(1) model
+ar1_model <- fit_ar1(google_2018$Close)
+
+cat("AR(1) Model Results:\n")
+cat("phi =", round(ar1_model$phi, 4), "\n")
+cat("sigma =", round(ar1_model$sigma, 4), "\n")
+cat("Log-likelihood =", round(ar1_model$loglik, 2), "\n")
+
+
+```
+
+Now we use simulation to predict 10 steps into the future. That is we define the simulation algorithm given our model above:
+
+```{r}
+simulate_ar1 <- function(model, last_value, h = 10, n_sim = 1000) {
+  phi <- model$phi
+  sigma <- model$sigma
+  
+  # Matrix to store simulations (n_sim x h)
+  sims <- matrix(NA, nrow = n_sim, ncol = h)
+  
+  for(i in 1:n_sim) {
+    y_sim <- numeric(h)
+    y_current <- last_value
+    
+    for(t in 1:h) {
+      # Generate next value: Y_t = phi * Y_{t-1} + epsilon_t
+      epsilon <- rnorm(1, mean = 0, sd = sigma)
+      y_sim[t] <- phi * y_current + epsilon
+      y_current <- y_sim[t]
+    }
+    
+    sims[i, ] <- y_sim
+  }
+  
+  return(sims)
+}
+```
+
+We now use this to define a prediction object that contains the (conditional) expectation prediction as well as a prediction interval:
+
+```{r}
+predict_ar1 <- function(model, last_value, h = 10, n_sim = 1000, 
+                       confidence_levels = c(80, 95)) {
+  
+  sims <- simulate_ar1(model, last_value, h, n_sim)
+  
+  # Calculate point forecasts (mean)
+  point_forecast <- colMeans(sims)
+  
+  # Calculate prediction intervals for specified confidence levels
+  lower_matrix <- matrix(NA, nrow = h, ncol = length(confidence_levels))
+  upper_matrix <- matrix(NA, nrow = h, ncol = length(confidence_levels))
+  
+  for(i in seq_along(confidence_levels)) {
+    cl <- confidence_levels[i]
+    alpha <- (100 - cl) / 100
+    lower_matrix[, i] <- apply(sims, 2, quantile, probs = alpha/2)
+    upper_matrix[, i] <- apply(sims, 2, quantile, probs = 1 - alpha/2)
+  }
+  
+  return(list(
+    point_forecast = point_forecast,
+    lower = lower_matrix,
+    upper = upper_matrix,
+    levels = confidence_levels,
+    simulations = sims
+  ))
+}
+```
+
+
+We use this to predict:
+
+```{r}
+# Generate predictions
+last_obs <- tail(google_2018$Close, 1)
+predictions <- predict_ar1(ar1_model, last_obs, h = 10, n_sim = 1000)
+
+#point forecasts (conditional expectations)
+paste("Point Forecasts:")
+predictions$point_forecast
+
+# lower CI
+paste("Lower Prediction Interval:")
+predictions$lower
+
+# higher CI
+paste("Upper Prediction Interval:")
+predictions$upper
+
+# Simulated values:
+paste("Simulated Future Values:")
+head(predictions$simulations)
+
+```
+
+This is a bit technical, but given these predictions we can define a forecast object that plays together nicely with the autoplot function of the fable package we will use.
+
+```{r}
+create_forecast_object <- function(y, predictions, start_time = NULL) {
+  n <- length(y)
+  h <- length(predictions$point_forecast)
+  
+  # If no start_time provided, assume simple indexing
+  if(is.null(start_time)) {
+    start_forecast = n + 1
+    end_forecast = n + h
+  } else {
+    start_forecast = start_time
+    end_forecast = start_time + h - 1
+  }
+  
+  # Create forecast object structure
+  forecast_obj <- structure(
+    list(
+      mean = ts(predictions$point_forecast, start = start_forecast, end = end_forecast),
+      lower = predictions$lower,
+      upper = predictions$upper,
+      level = predictions$levels,
+      x = ts(y),  # original data as time series
+      method = "AR(1) - Manual Implementation"
+    ),
+    class = "forecast"
+  )
+  
+  return(forecast_obj)
+}
+```
+
+
+```{r}
+ar1_forecast <- create_forecast_object(google_2018$Close, predictions)
+
+# Display predictions
+cat("\n10-step ahead predictions:\n")
+for(i in 1:10) {
+  cat("Step", i, ": ", round(predictions$point_forecast[i], 4), 
+      " [", round(predictions$lower[i, 2], 4), ", ",
+      round(predictions$upper[i, 2], 4), "]\n")
+}
+
+# Now you can use autoplot!
+library(forecast)
+library(ggplot2)
+
+# Plot using autoplot
+autoplot(ar1_forecast)
+```
+
+Now we do the same using the nice fable package:
+
+```{r}
+# First make the time series regular (basically map to {1,...,T})
+google_simple <- google_2018 |>
+  mutate(time_index = row_number()) |>
+  as_tsibble(index = time_index, regular = TRUE)
+
+fit <- google_simple |>
+  model(ARIMA(Close~0+pdq(1,0,0)))
+
+fit |>
+  forecast(h=10) |>
+  autoplot(google_simple)
+
+```
+
+
 ```{r}
 library(forecast)
 
@@ -85,7 +299,7 @@ autoplot(predictions) +
 ```
 
 
-## Fit and Predict DRF on data
+## Nonparametric Alternative: Fit and Predict DRF on data*
 
 ```{r}
 ## This will not work well here though!
