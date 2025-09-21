@@ -15,6 +15,8 @@ library(seasonal)
 library(astsa)
 library(fpp3)
 library(MASS)
+library(tidyverse)
+library(distributional)
 
 # Set seed for reproducibility
 set.seed(1)
@@ -46,8 +48,8 @@ fit |>
 
 ```{r}
 fit |>
-  select(aicc) |>
-  forecast() |>
+  dplyr::select(aicc) |>
+  forecast(h=10) |>
   autoplot(us_change |> filter(year(Quarter) > 2010))
 ```
 
@@ -105,46 +107,25 @@ colnames(Ypred[[1]])<-colnames(Yall)
 ### Continue here!!!
 
 h <- length(Ypred)  # forecast horizon
-last_period <- max(us_change$Quarter)  # get last period from your data
-forecast_periods <- seq(last_period, by = "quarter", length.out = h + 1)[-1]
+
+forecast_periods <- us_change %>% 
+  new_data(n = h) %>% 
+  pull(Quarter)  # or whatever your time index column is named
+
+forecast_periods
+
+
 
 # Convert Ypred to a fable (forecast table)
 forecast_df <- tibble(
   Quarter = forecast_periods,
   .model = "DRF",  # or whatever model name you prefer
-  Consumption = map(Ypred, ~distributional::dist_sample(list(.[,1]))),
-  Income = map(Ypred, ~distributional::dist_sample(list(.[,2])))
-) %>%
+  .distribution=dist_sample(x = Ypred)
+) |>
   as_fable(key = .model, index = Quarter, 
            response = c("Consumption", "Income"), 
-           distribution = c("Consumption", "Income"))
-
-# Create the prediction plot
-forecast_df %>%
-  autoplot(us_change %>% filter(year(Quarter) > 2010))
+           distribution = .distribution)   
 
 
-
-point_forecasts <- rowMeans(Ypred[2:(H+1),]) #pred_matrix[, "Point Forecast"]
-lower_80 <- apply(Ypred[2:(H+1),], 1, quantile, probs = 0.1 )  #pred_matrix[, "Lo 80"]
-upper_80 <- apply(Ypred[2:(H+1),], 1, quantile, probs = 0.9 ) #pred_matrix[, "Hi 80"]
-lower_95 <- apply(Ypred[2:(H+1),], 1, quantile, probs = 0.025 ) #pred_matrix[, "Lo 95"]
-upper_95 <- apply(Ypred[2:(H+1),], 1, quantile, probs = 0.975 )
-
-# Create a manual forecast object
-manual_forecast <- structure(
-  list(
-    mean = ts(point_forecasts, start=n+1, end=n+H),
-    lower = cbind(lower_80, lower_95),
-    upper = cbind(upper_80, upper_95),
-    level = c(80, 95),
-    x = ts(google_2018$Close)  # your original data
-  ),
-  class = "forecast"
-)
-
-# Plot it
-autoplot(manual_forecast) +
-  labs(title = "DRF(1) Forecast", 
-       y = "Close Price", 
-       x = "Time")
+forecast_df|>
+autoplot(us_change |> filter(year(Quarter) > 2010))
