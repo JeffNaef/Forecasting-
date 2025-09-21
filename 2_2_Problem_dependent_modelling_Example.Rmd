@@ -282,22 +282,6 @@ fit |>
 ```
 
 
-```{r}
-library(forecast)
-
-H=10 ## How many steps ahead
-
-# Fit AR(1) - treats it as a simple numeric vector
-ar1_model <- Arima(google_2018$Close, order = c(1, 0, 0))
-
-# Forecast
-predictions <- forecast(ar1_model, h = H)
-
-# Plot
-autoplot(predictions) +
-  labs(title = "AR(1) Forecast", y = "Close Price")
-```
-
 
 ## Nonparametric Alternative: Fit and Predict DRF on data*
 
@@ -305,6 +289,8 @@ autoplot(predictions) +
 ## This will not work well here though!
 library(drf)
 source("drfown.R")
+
+H<-10
 n<-length(google_2018$Close)
 X<-as.matrix(google_2018$Close[1:(n-1)])
 Y<-as.matrix(google_2018$Close[2:n])
