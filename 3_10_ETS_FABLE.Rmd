@@ -1,0 +1,97 @@
+---
+title: "8. Exponential smoothing"
+author: "8.7 Forecasting with ETS models"
+date: "OTexts.org/fpp3/"
+classoption: aspectratio=169
+titlepage: fpp3title.png
+titlecolor: fpp3red
+toc: false
+output:
+  binb::monash:
+    colortheme: monashwhite
+    fig_width: 7.5
+    fig_height: 3
+    keep_tex: no
+    includes:
+      in_header: fpp3header.tex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, fig.height = 6, fig.width = 10)
+library(ggplot2)
+library(tsibble)
+library(gridExtra)
+library(patchwork)
+library(dCovTS)
+library(doSNOW)
+library(fpp3)
+```
+
+## Forecasting with ETS models Example: Corticosteroid drug sales
+
+```{r h02-plot, echo = TRUE, fig.height=2.8}
+h02 <- PBS |>
+  filter(ATC2 == "H02") |>
+  summarise(Cost = sum(Cost))
+h02 |> autoplot(Cost)
+```
+
+We start by directly asking the fable package for an ETS model:
+
+```{r, echo=TRUE}
+h02 |>
+  model(ETS(Cost)) |>
+  report()
+```
+
+It gives us the smoothing parameter as well as the estimated initial states for the level $\ell_t$, seasonality $S_t$ and trend $T_t$. Note that the smoothing parameters here are very small; this tells us that the slope and seasonality are barely changing over time, so there is a linear trend and a roughly periodic seasonality. We can also see the information criteria AIC/AICc and BIC.
+
+Next we instead choose a model, namely with additive error, additive seasonality and additive trend:
+
+```{r, echo=TRUE}
+h02 |>
+  model(ETS(Cost ~ error("A") + trend("A") + season("A"))) |>
+  report()
+```
+
+The AICc value is now quite a bit bigger, indicating that the model does not fit as well as the previous one.
+
+Let's check the forecast of the actually chosen model:
+
+```{r, echo=TRUE, fig.height=3}
+h02 |>
+  model(ETS(Cost)) |>
+  forecast() |>
+  autoplot(h02)
+```
+
+It appears to pick up the trend and seasonality nicely! We now compare the results of the automatic model and the one we chose. Though note that with this code this is done on the \emph{training} data, which is not that interesting (instead we would need to use a holdout set):
+
+```{r, echo=TRUE}
+h02 |>
+  model(
+    auto = ETS(Cost),
+    AAA = ETS(Cost ~ error("A") + trend("A") + season("A"))
+  ) |>
+  accuracy()
+  
+  # If we had a test set, we could also calculate the energy distance:
+  #accuracy(measures = list(
+  #  point_accuracy_measures,
+  #  distribution_accuracy_measures
+  #))
+```
+
+At least on the training set, the automatically chosen model is quite a bit better.
+<!--
+## Your turn
+
+* Use `ETS()` on some of these series:\vspace*{0.2cm}
+
+> `tourism`, `gafa_stock`, `pelt`
+
+* Does it always give good forecasts?
+
+* Find an example where it does not work well. Can you figure out why?
+
+ -->
