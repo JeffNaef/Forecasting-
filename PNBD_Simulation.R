@@ -28,8 +28,8 @@ simulate_pnbd <- function(n_customers,
   Omega <- rexp(n_customers, rate = Lambda0)
   cat("Step 3: Generated customer lifetimes Omega ~ Exp(Lambda0)\n")
   
-  # Step 4: For each customer, simulate transaction times until death or observation end
-  cat("Step 4: Simulating transaction times...\n")
+  # Step 4: Generate transaction time points T_j starting from zero
+  cat("Step 4: Generating transaction time points T_j...\n")
   
   all_transactions <- data.frame()
   
@@ -37,25 +37,40 @@ simulate_pnbd <- function(n_customers,
     if (i %% 500 == 0) cat("  Processing customer", i, "of", n_customers, "\n")
     
     customer_transactions <- data.frame()
-    cumulative_time <- 0
-    transaction_count <- 0
     
-    # Keep generating inter-transaction times until customer dies or observation ends
-    while (cumulative_time < min(Omega[i], observation_period)) {
-      
-      # Draw inter-transaction time from exponential with rate M0[i]
+    # Customer's active period is minimum of their lifetime and observation period
+    active_period <- min(Omega[i], observation_period)
+    
+    # Generate transaction time points T_j by cumulating inter-transaction times
+    # Inter-transaction times T_{j-1,j} ~ Exp(M0[i])
+    # Transaction times T_j = sum_{l=1}^j T_{l-1,l} (starting from T_0 = 0)
+    
+    transaction_times <- c()  # Will store the actual transaction times T_j
+    current_time <- 0  # Start from T_0 = 0
+    
+    repeat {
+      # Generate next inter-transaction time T_{j-1,j} ~ Exp(M0[i])
       inter_transaction_time <- rexp(1, rate = M0[i])
-      cumulative_time <- cumulative_time + inter_transaction_time
       
-      # Only record transaction if it happens before death and within observation period
-      if (cumulative_time < min(Omega[i], observation_period)) {
-        transaction_count <- transaction_count + 1
+      # Calculate next transaction time T_j = T_{j-1} + T_{j-1,j}
+      next_transaction_time <- current_time + inter_transaction_time
+      
+      # Stop if this transaction would occur after customer death or observation end
+      if (next_transaction_time >= active_period) {
+        break
+      }
+      
+      # Record this transaction time
+      transaction_times <- c(transaction_times, next_transaction_time)
+      current_time <- next_transaction_time
+    }
+    
+    # Convert transaction times to dates and create transaction records
+    if (length(transaction_times) > 0) {
+      for (j in 1:length(transaction_times)) {
+        transaction_date <- start_date + days(round(transaction_times[j]))
         
-        # Create transaction record
-        transaction_date <- start_date + days(round(cumulative_time))
-        
-        # Generate a realistic transaction amount (you can modify this)
-        # Using a log-normal distribution to get realistic price variation
+        # Generate a realistic transaction amount
         transaction_amount <- round(rlnorm(1, meanlog = 3, sdlog = 0.5), 2)
         
         customer_transactions <- rbind(customer_transactions, 
