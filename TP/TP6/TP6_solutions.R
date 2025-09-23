@@ -94,7 +94,7 @@ full_loglik <- function(par, y){
                       gamma1, gamma0), nrow=2)
   
   # Compute log-likelihood for first two observations
-  ll_first2 <- -0.5 * (log(det(Sigma_2)) + t(y[1:2]) %*% solve(Sigma_2) %*% y[1:2])
+  ll_first2 <- -log(2*pi) - 0.5 * (log(det(Sigma_2)) + t(y[1:2]) %*% solve(Sigma_2) %*% y[1:2])
   
   # Conditional likelihood for y[3:n] given previous two
   res <- y[3:n] - phi1*y[2:(n-1)] - phi2*y[1:(n-2)]
@@ -107,9 +107,9 @@ full_loglik <- function(par, y){
 
 
 # set n for simu
-n = 20
+n = 15
 B= 500
-phi1 = .4
+phi1 = .6
 phi2 = .2
 sigma=5
 sigma2=sigma^2
@@ -128,12 +128,15 @@ colnames(mat_ls) <- c("phi1","phi2","sigma2")
 mat_fpp3 <- matrix(NA, nrow=B, ncol=3)
 colnames(mat_fpp3) <- c("phi1","phi2","sigma2")
 
+mat_stats_arima <- matrix(NA, nrow=B, ncol=3)
+colnames(mat_stats_arima) <- c("phi1","phi2","sigma2")
+
 
 
 
 
 for(b in seq(B)){
-  # b=1
+  # b=103
   # generate AR2
   set.seed(123+b)
   
@@ -164,15 +167,32 @@ for(b in seq(B)){
   # store
   theta_hat_ls <- c(phi1 = phi_hat_ls[1], phi2 = phi_hat_ls[2], sigma2 = sigma2_hat_ls)
   mat_ls[b,] <- theta_hat_ls
+  
+  
   # Built-in arima function
   ## Built-in fable AR(2) 
 
-  y_ts <- tibble(time = 1:n, value = y) %>% 
+  y_ts <- tibble(time = 1:n, value = y) %>%
     as_tsibble(index = time)
   fit_fpp3 <- y_ts %>%
-    model(ar2 = ARIMA(value ~ pdq(2,0,0))) 
-  theta_hat_fpp3 <- c( coef(fit_fpp3)$estimate[1:2],as.numeric( glance(fit_fpp3)[,"sigma2"]))  # phi1, phi2
-  mat_fpp3[b,] <- theta_hat_fpp3
+    model(ar2 = ARIMA(value ~ 0 + pdq(2,0,0)))
+  
+  mod <- fit_fpp3$ar2[[1]]
+  
+  if (!fabletools::is_null_model(mod)) {
+    theta_hat_fpp3 <- c(
+      coef(fit_fpp3)$estimate[1:2],
+      as.numeric(glance(fit_fpp3)[, "sigma2"])
+    )
+    mat_fpp3[b, ] <- theta_hat_fpp3
+  } else {
+    mat_fpp3[b, ] <- c(NA, NA, NA)  # fill NA if model failed
+  }
+  
+  # stats arima
+  fit = stats::arima(y, order=c(2,0,0), method="ML", include.mean = FALSE)
+  theta_hat_stats_arima = c(fit$coef, fit$sigma2)
+  mat_stats_arima[b,] <- theta_hat_stats_arima
   
   
   # save in matrix
@@ -181,9 +201,9 @@ for(b in seq(B)){
 
 
 # boxplot for each parameters comparing each method
-boxplot(mat_fl[,1], mat_cl[,1], mat_ls[,1], mat_fpp3[,1], names=c("Full lik","Cond lik","Least sq","fpp3"), main=expression(phi[1]), ylab=expression(hat(phi)[1]))
+boxplot(mat_fl[,1], mat_cl[,1], mat_ls[,1], mat_fpp3[,1],mat_stats_arima[,1], names=c("Full lik","Cond lik","Least sq","fpp3", "stats"), main=expression(phi[1]), ylab=expression(hat(phi)[1]), outline = F)
 abline(h=phi1, col="red", lty=2)
-boxplot(mat_fl[,2],mat_cl[,2], mat_ls[,2], mat_fpp3[,2],names = c("Full lik","Cond lik","Least sq","fpp3"), main=expression(phi[2]), ylab=expression(hat(phi)[2]))
+boxplot(mat_fl[,2],mat_cl[,2], mat_ls[,2], mat_fpp3[,2],mat_stats_arima[,2],names = c("Full lik","Cond lik","Least sq","fpp3", "stats"), main=expression(phi[2]), ylab=expression(hat(phi)[2]), outline = F)
 abline(h=phi2, col="red", lty=2)
-boxplot(mat_fl[,3],mat_cl[,3], mat_ls[,3], mat_fpp3[,3],names= c("Full lik","Cond lik","Least sq","fpp3"), main=expression(sigma^2), ylab=expression(hat(sigma)^2))
+boxplot(mat_fl[,3],mat_cl[,3], mat_ls[,3], mat_fpp3[,3],mat_stats_arima[,3],names= c("Full lik","Cond lik","Least sq","fpp3", "stats"), main=expression(sigma^2), ylab=expression(hat(sigma)^2), outline = F)
 abline(h=sigma^2, col="red", lty=2)

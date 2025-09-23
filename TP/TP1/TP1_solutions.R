@@ -188,7 +188,7 @@ interval(PBS)
 help(vic_elec)
 vic_elec
 data(vic_elec)
-
+?vis_elec
 vic_elec |> autoplot()
 vic_elec |> autoplot(Temperature) + 
   labs(title = "Temperature, Australia", y = "Temperature, C")
