@@ -2,7 +2,6 @@ rm(list=ls())
 
 
 # ex01 generate from arma 1 0 1, fit model on train, parametric bootstrap sample path, compute mean and quantile on these, plot, compute score for both prediction, report score
-rm(list=ls())
 
 n <- 200
 phi <- 0.6   
@@ -10,7 +9,6 @@ theta <- 0.3
 sigma <- 1
 
 y <- arima.sim(n = n, list(ar = phi, ma = theta), sd = sigma)
-
 
 p_train <- 0.7
 n_train <- floor(n * p_train)
@@ -44,8 +42,7 @@ for(b in 1:B){
   lines(n_train + 1:h, boot_preds[,b], col=rgb(0,0,0,alpha=0.05))
 }
 
-# mean forecast
-lines(n_train + 1:h, pred_mean, col="blue", lwd=2)
+
 
 # quantile forecast band
 lines(n_train + 1:h, pred_q_upper, col="red", lwd=2, lty=2)
@@ -55,6 +52,9 @@ lines(n_train + 1:h, pred_q_lower, col="red", lwd=2, lty=2)
 polygon(c(n_train + 1:h, rev(n_train + 1:h)),
         c(pred_q_upper, rev(pred_q_lower)),
         col=rgb(1,0,0,alpha=0.2), border=NA)
+
+# mean forecast
+lines(n_train + 1:h, pred_mean, col="blue", lwd=2)
 
 legend("topleft",
        legend=c("Observed","Mean forecast","90% Prediction Band"),

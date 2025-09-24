@@ -207,3 +207,102 @@ boxplot(mat_fl[,2],mat_cl[,2], mat_ls[,2], mat_fpp3[,2],mat_stats_arima[,2],name
 abline(h=phi2, col="red", lty=2)
 boxplot(mat_fl[,3],mat_cl[,3], mat_ls[,3], mat_fpp3[,3],mat_stats_arima[,3],names= c("Full lik","Cond lik","Least sq","fpp3", "stats"), main=expression(sigma^2), ylab=expression(hat(sigma)^2), outline = F)
 abline(h=sigma^2, col="red", lty=2)
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ------------------------------------ exercise 3
+
+
+
+# Use R to simulate and plot some data from simple ARIMA models.
+
+# 1. Use the following R code to generate data from an AR(1) model with phi_1 = 0.6 and sigma^2=1. 
+# The process starts with y_1=0.
+
+y <- numeric(100)
+e <- rnorm(100)
+for(i in 2:100){
+  y[i] <- 0.6*y[i-1] + e[i]}
+sim <- tsibble(idx = seq_len(100), y = y, index = idx)
+plot(sim, type="l")
+
+ar1 <- function(phi, n = 100L) {
+  
+  y <- numeric(n)
+  e <- rnorm(n)
+  for (i in 2:n) {
+    y[i] <- phi * y[i - 1] + e[i]
+  }
+  
+  tsibble(idx = seq_len(n), y = y, index = idx)
+}
+
+# 2. Produce a time plot for the series. How does the plot change as you change phi_1 ?
+
+ar1(0.6)
+ar1(0.6) |> autoplot(y) + labs(title=expression(paste(phi, "=0.6")))
+ar1(0.95) |> autoplot(y) + labs(title=expression(paste(phi, "=0.95")))
+ar1(0.05) |> autoplot(y) + labs(title=expression(paste(phi, "=0.05"))) # when phi_1 = 0, y is a WN
+ar1(-0.65) |> autoplot(y) + labs(title=expression(paste(phi, "=-0.65"))) # when phi_1 < 0, y tends to oscillate
+
+
+# 3. Write your own code to generate data from an MA(1) model with theta_1  =  0.6 and sigma^2=1.
+
+ma1 <- function(theta, n = 100L) {
+  y <- numeric(n)
+  e <- rnorm(n)
+  for (i in 2:n) {
+    y[i] <- theta * e[i - 1] + e[i]
+  }
+  tsibble(idx = seq_len(n), y = y, index = idx)
+}
+
+# 4. Produce a time plot for the series. How does the plot change as you change $\theta_1$?
+
+ma1(0.6) |> autoplot(y) + labs(title=expression(paste(theta, "=0.6")))
+ma1(0.95) |> autoplot(y) + labs(title=expression(paste(theta, "=0.95")))
+ma1(0.05) |> autoplot(y) + labs(title=expression(paste(theta, "=0.05"))) # when \theta_1 = 0, y is a WN
+ma1(-0.65) |> autoplot(y) + labs(title=expression(paste(theta, "=-0.65")))
+
+# Increasing the magnitude (absolute value) of \theta_1, will increase the impact of the lagged error term 
+# on the current value, making the series more responsive to recent shocks.
+
+# 5. Generate data from an ARMA(1,1) model with $\phi_{1} = 0.6$, $\theta_{1}  = 0.6$ and $\sigma^2=1$.
+
+arma11 <- function(phi, theta, n = 100) {
+  y <- numeric(n)
+  e <- rnorm(n)
+  for (i in 2:n) {
+    y[i] <- phi * y[i - 1] + theta * e[i - 1] + e[i]
+  }
+  tsibble(idx = seq_len(n), y = y, index = idx)
+}
+arma11(0.6, 0.6) |> autoplot(y)
+
+# 6. Generate data from an AR(2) model with phi_1 =-0.8, phi_2 = 0.3 and sigma^2=1. 
+# (Note that these parameters will give a non-stationary series.)
+
+ar2 <- function(phi1, phi2, n = 100) {
+  y <- numeric(n)
+  e <- rnorm(n)
+  for (i in 3:n) {
+    y[i] <- phi1 * y[i - 1] + phi2 * y[i - 2] + e[i]
+  }
+  tsibble(idx = seq_len(n), y = y, index = idx)
+}
+ar2(-0.8, 0.3) |> autoplot(y) # we violate the condition (phi_2 - phi_1) < 1 --> AR(2) is not stationary
+
+# Plot the latter two series and compare them.
+
+# See graphs above. The non-stationarity of the AR(2) process has led to increasing oscillations
+
