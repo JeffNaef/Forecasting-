@@ -102,6 +102,8 @@ components(dcmp)
 ```{r usretail-stl, fig.width=8, fig.height=5}
 components(dcmp) |> autoplot()
 ```
+
+
 Here the seasonal pattern doesn't seem to change much, though there is a small difference at the start, as compared to the end. Note that the gray bars give us infromation on how the different plots scale. We can also plot the trend over the original series:
 
 ```{r dable4}
@@ -134,6 +136,8 @@ us_retail_employment |>
   labs(y = "Persons (thousands)", title = "Total employment in US retail")
 
 ```
+
+
 Here we plotted the trend + remainder, this is why it is less smooth
 
 ## Seasonal adjustment
@@ -146,7 +150,6 @@ Here we plotted the trend + remainder, this is why it is less smooth
 
 ## STL decomposition in Detail
 
-\fontsize{13}{14}\sf
 
   *  STL: "Seasonal and Trend decomposition using Loess"
   *  Very versatile and robust.
@@ -178,6 +181,7 @@ us_retail_employment |>
   autoplot() + labs(title = "STL decomposition: US retail employment")
 ```
 
+
 We see that the seasonal patterns change a bit over time. Lets say we do not want this, then we type:
 
 ```{r stlwindowperiodic, warning=FALSE, fig.width=8.5, fig.height=3.4}
@@ -186,6 +190,9 @@ us_retail_employment |>
   components() |>
   autoplot() + labs(title = "STL decomposition: US retail employment")
 ```
+
+
+
 Now we have the same pattern every year. We can also change the number of windows that are used. The smaller this number, the more the seasonal patterns is allowed to change (we essentially use smaller windows to estimate the seasonal component):
 
 ```{r stlwindow94, warning=FALSE, fig.width=8.5, fig.height=3.4}
@@ -194,6 +201,7 @@ us_retail_employment |>
   components() |>
   autoplot() + labs(title = "STL decomposition: US retail employment")
 ```
+
 
 We can also influence how the trend is plotted. Again, the window size allows us to influence how many windows are used to estimate the trend: The lower this number, the more ``wiggly'' the trend is estimated. In the extreme of a very high value, the trend becomes a straight line.
 
@@ -211,6 +219,9 @@ us_retail_employment |>
   components() |>
   autoplot() + labs(title = "STL decomposition: US retail employment")
 ```
+
+
+
 In this case ``unusual'' observations get downweighted, so potential outliers will not influence the result too much.
 
 

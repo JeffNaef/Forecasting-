@@ -46,7 +46,7 @@ google_2018 |>
   autoplot()
 ```
 
-After differencing, the acf values are as we would expect for an independent series ($5\%$ of violations are expected). However since the acf is only able to deal with linear dependence, we also employ a more general, the auto-distance correlation measure to double check:
+After differencing, the acf values are as we would expect for an independent series ($5\%$ of violations are expected). However since the acf is only able to deal with linear dependence, we also employ a more general, the distance autocorrelation measure to double check:
 
 ```{r}
 google_2018 |>
@@ -63,7 +63,7 @@ In summary:
 -   The differences are the **day-to-day** changes.
 -   Now the series looks just like a white noise series:
     -   No autocorrelations outside the 95% limits.
-    -   No distance-correlation outside the 95% limits.
+    -   No distance autocorrelation outside the 95% limits.
 -   **Conclusion:** The daily change in the Google stock price is essentially a random quantity uncorrelated with previous days.
 
 ## Fit and Predict an AR(1) model on data
