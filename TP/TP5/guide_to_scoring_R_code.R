@@ -158,7 +158,7 @@ cat("Mean Estimator MAE:", round(MAE1, 2), "\n")
 cat("Median Estimator MAE:", round(MAE2, 2), "\n")
 cat("Median estimator is better for MAE:", MAE2 < MAE1, "\n")
 
-**Key Insight**: The mean estimator minimizes MSE, while the median estimator minimizes MAE. This demonstrates why the choice of metric matters!
+# **Key Insight**: The mean estimator minimizes MSE, while the median estimator minimizes MAE. This demonstrates why the choice of metric matters!
   
   ## Interval Predictions: Quantile Scoring
   

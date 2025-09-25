@@ -24,13 +24,11 @@ rm(list = ls())
 
 
 # ----------- example pipes
-# set.seed(123)
-# mean(tail(rnorm(10), 5))
-# rnorm(10) %>%
-#   tail(5) %>%
-#   mean()
-
-
+mean(log(abs(c(-3, -2, -1, .1, 1, 2, 3))))
+c(-3, -2, -1, .1, 1, 2, 3) %>%
+  abs() %>%
+  log() %>%
+  mean()
 
 # 
 # iris
@@ -43,15 +41,20 @@ rm(list = ls())
 
 
 # ----------------------------- pkg
+
+
 library(fpp3)
 library(tsibble)
 library(dplyr)
+library(tsibbledata)
 
-
-# -------------------------------------- exercise 1
+# ------tsibbledata# -------------------------------------- exercise 1
 
 # Load the built-in PBS dataset
 data("PBS")
+View(PBS)
+
+?mean
 ?PBS
 # Inspect the first rows
 head(PBS)
@@ -68,8 +71,11 @@ range(PBS%>%pull(Month))
 # Count number of observations per key (e.g., per ATC1)
 PBS %>%
   count(ATC1_desc)
+str(PBS)
+colnames(PBS)%>%
+  count(ATC2_desc)
 
-
+# dplyr
 # ------------------ exercice 2
 
 # Create a tibble with monthly sales for two products
@@ -79,7 +85,12 @@ sales_data <- tibble(
   sales = c(10, 12, 15, 14, 18, 20, 8, 9, 12, 11, 13, 15)
 )
 
+
+
+attributes(sales_data)
+
 # Convert the tibble into a tsibble
+# as_tibble(sales_data, index = sales_data$month, key = sales_data$product)
 sales_tsibble <- sales_data %>%
   as_tsibble(index = month, key = product)
 
@@ -96,26 +107,11 @@ ggplot(sales_tsibble, aes(x = month, y = sales, color = product)) +
 
 
 
+
+
 # -------------------- exercice 3
 
-
-# # Load necessary packages
-# library(tibble)
-# library(readr)
-# 
-# # Create fake monthly sales data for two smartphone models
-# smartphone_sales <- tibble(
-#   month = rep(seq.Date(from = as.Date("2025-01-01"), by = "month", length.out = 6), 2),
-#   model = rep(c("AlphaX", "BetaY"), each = 6),
-#   units_sold = c(150, 180, 200, 190, 220, 250, 120, 140, 160, 155, 170, 200)
-# )
-# 
-# # Save the dataset as a CSV with a meaningful name
-# write_csv(smartphone_sales, "TP/data/smartphone_sales.csv")
-
-
-
-
+library(readr)
 # Read the CSV file
 sales_data <- read_csv("TP/data/smartphone_sales.csv")
 
@@ -150,17 +146,18 @@ ggplot(sales_tsibble, aes(x = month, y = units_sold, color = model)) +
 
 library(tsibbledata)
 gafa_stock
+
 str(gafa_stock)
 ?gafa_stock
 help(gafa_stock)
 gafa_stock
 data("gafa_stock")
-View(gafa_stock)
 str(gafa_stock)
-gafa_stock |> autoplot()  # %>% from magrittr
-autoplot(gafa_stock)
 
-library(tsibble)
+
+autoplot(gafa_stock)
+gafa_stock |> autoplot()  # %>% from magrittr
+
 gafa_stock$Date
 str(gafa_stock)
 gafa_stock |>
@@ -172,7 +169,6 @@ gafa_stock_new |>
   autoplot(Close) +
   labs(title = "Apple stocks", subtitle = "Closing price", y = "USD")
 
-?interval
 
 
 help(PBS)
@@ -188,11 +184,14 @@ interval(PBS)
 help(vic_elec)
 vic_elec
 data(vic_elec)
+View(vic_elec)
 ?vis_elec
 vic_elec |> autoplot()
 vic_elec |> autoplot(Temperature) + 
   labs(title = "Temperature, Australia", y = "Temperature, C")
 
+
+vic_elec |> autoplot()
 vic_elec |> 
   slice_head(n=500) |> 
   autoplot()
@@ -201,12 +200,13 @@ vic_elec |>
   filter(yearmonth(Time) == yearmonth("2013 June")) |> 
   autoplot(Demand)
 
-
+yearmonth(vic_elec$Time)
 
 ?pelt
 help(pelt)
 
 str(pelt)
+View(pelt)
 
 ?pelt
 pelt |> autoplot()
@@ -222,6 +222,7 @@ pelt |>
 
 plot(x = pelt$Year,  y =pelt$Hare, type="l", col="red")
 lines(x = pelt$Year,  y =pelt$Lynx, col="blue4")
+grid(col= "grey80")
 
 # 2. Use filter() to find what days correspond to the peak closing price for each 
 # of the four stocks in gafa_stock.
@@ -239,14 +240,15 @@ gafa_stock_new |>
 # (a) Install the USgas package.
 # install.packages("USgas")
 library(USgas)
-help(USgas)
+
 
 #--
 # (b) Create a tsibble from us_total with year as the index and state as the key.
-
 ?us_total
 data("us_total")
 head(us_total)
+str(us_total)
+
 str(us_total)
 
 us_tsibble <- us_total |> 
@@ -255,6 +257,8 @@ us_tsibble <- us_total |>
     key = state
   )
 
+
+str(us_tsibble)
 us_tsibble
 str(us_tsibble)
 str(us_total)
@@ -265,6 +269,10 @@ str(us_total)
 
 unique(us_tsibble$state)
 
+
+
+
+# "b" %in% c("b", "c", "d")
 
 us_tsibble |> 
   filter(state %in% c("Maine", "Vermont", "New Hampshire", "Massachusetts", "Connecticut", "Rhode Island")) |> 
@@ -296,6 +304,7 @@ us_tsibble |>
 
 ?aus_production
 data("aus_production")
+View(aus_production)
 colnames(aus_production)
 # Quarterly estimates of selected indicators of manufacturing production in Australia.
 # Half-hourly data with six series
@@ -373,7 +382,7 @@ vic_elec[350:1900, ] |>
   )
 
 
-
-
+# 1e3
+# 1e-2
 
 
