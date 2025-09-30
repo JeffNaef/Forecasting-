@@ -1,6 +1,9 @@
 rm(list=ls())
   
   ## Introduction
+
+## This is taken from the folllowing Medium article:
+##
   
   # When evaluating machine learning models, the choice of evaluation metric can significantly impact which model appears "best." This document demonstrates why different scoring metrics are appropriate for different types of predictions and how proper scoring rules help us make better choices.
 

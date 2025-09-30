@@ -88,7 +88,7 @@ p1 <- ggplot(arma11_data, aes(x = time, y = value)) +
 print(p1)
 ```
 
-## ACF/PACF Patterns: The Key to ARMA Identification
+## ACF/PACF Patterns: Some help for ARMA Identification
 
 ARMA processes have characteristic ACF and PACF patterns:
 - **ACF**: Decays gradually (mix of exponential and oscillatory)
