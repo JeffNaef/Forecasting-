@@ -7,6 +7,7 @@ library(dCovTS)
 # Theoretical distance correlation formula from Székely et al. 
 # MEASURING AND TESTING DEPENDENCE BY CORRELATION OF DISTANCES
 theoretical_dcor <- function(rho) {
+  # rho = 0
   numerator <- rho * asin(rho) + sqrt(1 - rho^2) - rho * asin(rho / 2) - sqrt(4 - rho^2) + 1
   denominator <- 1 + pi/3 - sqrt(3)
   return(sqrt(numerator / denominator))
@@ -26,12 +27,14 @@ empirical_autocor <- function(x, lag.max = 20) {
 }
 
 # Theoretical distance correlation for standard normals (Székely et al. 2007)
-theoretical_dcor_normal <- function(rho) {
-  # rho = correlation
-  (rho * asin(rho) + sqrt(1 - rho^2) -  rho * asin(rho/2) - sqrt(4 - rho^2) + 1) /
-    (1 + pi/3 - sqrt(3))
-}
+# theoretical_dcor_normal <- function(rho) {
+#   # rho = correlation
+#   (rho * asin(rho) + sqrt(1 - rho^2) -  rho * asin(rho/2) - sqrt(4 - rho^2) + 1) /
+#     (1 + pi/3 - sqrt(3))
+# }
 
+# theoretical_dcor_normal(.5)
+# theoretical_dcor(.5)^2
 # ------------ exercise 1
 
 n <- 500
@@ -77,8 +80,6 @@ dcor_manual <- function(x, lag.max = 20) {
   })
 }
 
-
-
 dcor_wn <- dcor_manual(X_wn, lag_max)
 
 # compare with ADCF from dCovTS
@@ -86,7 +87,7 @@ dcor_wn_2 = ADCF(X_wn, MaxLag = lag_max)
 all.equal(dcor_wn, as.vector(dcor_wn_2))
 
 # Theoretical distance correlation: WN is i.i.d. => rho=0 for lag>0
-dcor_theo <- sapply(0:lag_max, function(h) if(h==0) 1 else theoretical_dcor_normal(0))
+dcor_theo <- sapply(0:lag_max, function(h) if(h==0) 1 else theoretical_dcor(0))
 
 # Plot: empirical vs theoretical distance correlation
 plot(0:lag_max, dcor_wn, type="b", pch=16, col="red",
