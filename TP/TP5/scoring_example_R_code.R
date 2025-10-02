@@ -5,7 +5,6 @@ library(dCovTS)
 library(scoringRules)
 library(distributional)
 
-##Continue here, this does not work!!
 
 google_2018 <- gafa_stock |>
   filter(Symbol == "GOOG", year(Date) == 2018) |>
@@ -71,7 +70,7 @@ for(i in 1:H) {
   # Get the distribution for horizon i
   forecast_dist <- ar1_forecast$Close[[i]]
   
-  # Generate 100 samples from this distribution
+  # Generate N=100 samples from this distribution
   samplesi <- distributional::generate(forecast_dist, times = 100)[[1]]
   
   crps_values[i] <- crps_sample(y = test_data$Close[i], 
