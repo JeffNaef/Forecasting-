@@ -26,7 +26,7 @@ google_2018 |>
 ```
 
 
-Now as mentioned in the lecture we have some problems with the Dates because they are irregular (no trading on weekends). However it is safe to assume that time between events (i.e. observation of prices) does \textbf{not hold information} and we do not want to model this actively. As such we simply transform the Dates to $\{1,\ldots,T\}$, as discussed in the lecture:
+Now as mentioned in the lecture we have some problems with the Dates because they are irregular (no trading on weekends). However it is safe to assume that time between events (i.e. observation of prices) does \textbf{not hold information} and we do not want to model this actively. As such we simply transform the Dates to $\{1,\ldots,T\}$, as discussed in the lecture (using ``mutate''):
 
 ```{r}
 google_2018 <- gafa_stock |>
