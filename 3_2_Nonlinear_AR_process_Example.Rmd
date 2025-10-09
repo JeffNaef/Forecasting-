@@ -34,6 +34,8 @@ The ARCH(1) is usually written as $$
 
 ## Simulating an ARCH(1) Process
 
+We now simulate from an ARCH(1) process. Note that below we can choose between Gaussian residuals, or heavy-tailed $t$ distributed residuals!
+
 ```{r simulation}
 # Parameters for ARCH(1) model
 n <- 1000          # Number of observations
@@ -54,7 +56,10 @@ y[1] <- mu + epsilon[1]
 # Generate ARCH(1) process
 for (t in 2:n) {
   sigma2[t] <- varphi0 + varphi1 * epsilon[t-1]^2
-  epsilon[t] <- rnorm(1, 0, sqrt(sigma2[t]))
+  ##Gaussian residuals
+  #epsilon[t] <- rnorm(1, 0, sqrt(sigma2[t]))
+  ## t residuals (much more heavy-tailed than Gaussian):
+  epsilon[t] <- rt(1,df=5)*sqrt(sigma2[t])
   y[t] <- mu + epsilon[t]
 }
 
@@ -143,6 +148,157 @@ Cov(Y_t, Y_{t-1})&=\mathbb{E}[Y_t Y_{t-1}] - \varphi_0^2\\
 \end{align*}
 Similarly, $Cov(Y_t, Y_{t-h})=0$ for all $h > 1$.
 However it turns out there is autocorrelation between $Y_{t}^2$ and $Y_{t-1}^2$, which is plotted in the third plot (below left). Finally, the ADCF plot also correctly picks up upon the dependence between $Y_t$, $Y_{t-h}$, though it wrongly also 
+
+
+## Estimation
+
+We now implement our own estimation procedure, as discussed in the slides:
+
+```{r}
+## Maximum Likelihood Estimation of ARCH(1)
+
+# Define the negative log-likelihood function
+neg_log_likelihood <- function(params, y) {
+  mu <- params[1]
+  varphi0 <- params[2]
+  varphi1 <- params[3]
+  
+  # Check parameter constraints
+  if (varphi0 <= 0 || varphi1 < 0 || varphi1 >= 1) {
+    return(1e10)  # Return large value if constraints violated
+  }
+  
+  N <- length(y)
+  epsilon <- y - mu
+  
+  # Initialize conditional variance
+  sigma2 <- numeric(N)
+  sigma2[1] <- 1
+  
+  # Calculate conditional variances
+  for (t in 2:N) {
+    sigma2[t] <- varphi0 + varphi1 * epsilon[t-1]^2
+  }
+  
+  # Calculate log-likelihood (excluding first observation)
+  #log_lik <- sum(dnorm( y[2:N]  , mean = mu, sd = sqrt(sigma2[2:N]), log = TRUE))  ##dnorm with log=T, log density of Gaussian
+  ## Or directly use the formula from the lecture:
+  log_lik <- sum(dnorm( (y[2:N]-mu)/sqrt(sigma2[2:N])  , mean = 0, sd = 1, log = TRUE) - log(sqrt(sigma2[2:N])) ) ##dnorm with log=T, log density of Gaussian
+
+  
+  return(-log_lik)  # Return negative for minimization
+}
+
+# Estimate parameters using optim
+initial_params <- c(mu = 0, varphi0 = 0.1, varphi1 = 0.5)
+
+fit <- optim(
+  par = initial_params,
+  fn = neg_log_likelihood,
+  y = y,
+  method = "L-BFGS-B",
+  lower = c(-Inf, 0.001, 0),      # Lower bounds
+  upper = c(Inf, Inf, 0.999),     # Upper bounds
+  hessian = TRUE
+)
+
+# Extract estimates
+estimates <- fit$par
+names(estimates) <- c("mu", "varphi0", "varphi1")
+
+# Calculate standard errors from Hessian
+std_errors <- sqrt(diag(solve(fit$hessian)))
+names(std_errors) <- c("mu", "varphi0", "varphi1")
+
+# Display results
+cat("\n=== ARCH(1) Maximum Likelihood Estimation Results ===\n\n")
+cat("True parameters:\n")
+cat(sprintf("  mu       = %.4f\n", mu))
+cat(sprintf("  varphi0  = %.4f\n", varphi0))
+cat(sprintf("  varphi1  = %.4f\n\n", varphi1))
+
+cat("Estimated parameters:\n")
+cat(sprintf("  mu_hat       = %.4f (SE = %.4f)\n", estimates[1], std_errors[1]))
+cat(sprintf("  varphi0_hat  = %.4f (SE = %.4f)\n", estimates[2], std_errors[2]))
+cat(sprintf("  varphi1_hat  = %.4f (SE = %.4f)\n\n", estimates[3], std_errors[3]))
+
+cat("Log-likelihood:", -fit$value, "\n")
+cat("Convergence:", ifelse(fit$convergence == 0, "Successful", "Failed"), "\n")
+```
+
+We can also modify this code for a different error distribution, namely the often used $t$ distribution with $v$ degrees of freedom (which is more heavy tailed). Though notice that if we used a Gaussian distribution to generate the data then $v$ is actually infinity.
+
+```{r}
+## Maximum Likelihood Estimation of ARCH(1) with t distributed errors (!)
+
+# Define the negative log-likelihood function
+neg_log_likelihood <- function(params, y) {
+  mu <- params[1]
+  varphi0 <- params[2]
+  varphi1 <- params[3]
+    v <- params[4]
+  
+  # Check parameter constraints
+  if (varphi0 <= 0 || varphi1 < 0 || varphi1 >= 1) {
+    return(1e10)  # Return large value if constraints violated
+  }
+  
+  N <- length(y)
+  epsilon <- y - mu
+  
+  # Initialize conditional variance
+  sigma2 <- numeric(N)
+  sigma2[1] <- 1
+  
+  # Calculate conditional variances
+  for (t in 2:N) {
+    sigma2[t] <- varphi0 + varphi1 * epsilon[t-1]^2
+  }
+  
+  # Calculate log-likelihood (excluding first observation)
+  #log_lik <- sum(dnorm( y[2:N]  , mean = mu, sd = sqrt(sigma2[2:N]), log = TRUE))  ##dnorm with log=T, log density of Gaussian
+  ## Or directly use the formula from the lecture:
+  log_lik <- sum(dt( (y[2:N]-mu)/sqrt(sigma2[2:N])  , df=v, log = TRUE) - log(sqrt(sigma2[2:N])) ) ##dnorm with log=T, log density of Gaussian
+
+  
+  return(-log_lik)  # Return negative for minimization
+}
+
+# Estimate parameters using optim
+initial_params <- c(mu = 0, varphi0 = 0.1, varphi1 = 0.5, v=4)
+
+fit <- optim(
+  par = initial_params,
+  fn = neg_log_likelihood,
+  y = y,
+  method = "L-BFGS-B",
+  lower = c(-Inf, 0.001, 0, 3),      # Lower bounds
+  upper = c(Inf, Inf, 0.999, Inf),     # Upper bounds
+  hessian = F
+)
+
+# Extract estimates
+estimates <- fit$par
+names(estimates) <- c("mu", "varphi0", "varphi1")
+
+# Display results
+cat("\n=== ARCH(1) Maximum Likelihood Estimation Results ===\n\n")
+cat("True parameters:\n")
+cat(sprintf("  mu       = %.4f\n", mu))
+cat(sprintf("  varphi0  = %.4f\n", varphi0))
+cat(sprintf("  varphi1  = %.4f\n\n", varphi1))
+cat(sprintf("  v  = %.4f\n\n", Inf))
+
+cat("Estimated parameters:\n")
+cat(sprintf("  mu_hat       = %.4f \n", estimates[1]))
+cat(sprintf("  varphi0_hat  = %.4f \n", estimates[2]))
+cat(sprintf("  varphi1_hat  = %.4f \n\n", estimates[3]))
+cat(sprintf("  v  = %.4f\n\n", estimates[4]))
+
+cat("Log-likelihood:", -fit$value, "\n")
+cat("Convergence:", ifelse(fit$convergence == 0, "Successful", "Failed"), "\n")
+```
+
 
 ## Key Properties of ARCH(1) Process
 
