@@ -31,6 +31,13 @@ vic_elec_daily <- vic_elec |>
 
 \textbf{Combine Fourier terms with ARIMA errors}
 
+\begin{itemize}
+\item s = 12 for monthly data with yearly seasonality
+\item s = 4 for quarterly data with yearly seasonality
+\item s = 7 for daily data with weekly seasonality
+\item s = 52 for weekly data with yearly seasonality
+\end{itemize}
+
 ### Advantages
    * it allows any length seasonality;
    * for data with more than one seasonal period, you can include Fourier terms of different frequencies;
@@ -38,7 +45,7 @@ vic_elec_daily <- vic_elec |>
    * the short-term dynamics are easily handled with a simple ARMA error.
 
 ### Disadvantages
- * seasonality is assumed to be fixed
+ * seasonality is assumed to be fixed (relatively small disadvantage)
 
 ## Eating-out expenditure
 
@@ -75,7 +82,6 @@ glance(fit) |>
   knitr::kable()
 ```
 
-## Eating-out expenditure
 
 ```{r, echo=FALSE}
 cafe_plot <- function(...) {
@@ -97,41 +103,41 @@ cafe_plot <- function(...) {
 cafe_plot(K = 1)
 ```
 
-## Eating-out expenditure
 
 ```{r cafe2, dependson='cafe', fig.height=4, echo=FALSE}
 cafe_plot(K = 2)
 ```
+
+
 Notice that the ARIMA term gets simpler for larger values of $K$!
 
-## Eating-out expenditure
 
 ```{r cafe3, dependson='cafe', fig.height=4, echo=FALSE}
 cafe_plot(K = 3)
 ```
 
-## Eating-out expenditure
+
 
 ```{r cafe4, dependson='cafe', fig.height=4, echo=FALSE}
 cafe_plot(K = 4)
 ```
 
-## Eating-out expenditure
 
 ```{r cafe5, dependson='cafe', fig.height=4, echo=FALSE}
 cafe_plot(K = 5)
 ```
 
-## Eating-out expenditure
 
 ```{r cafe6, dependson='cafe', fig.height=4, echo=FALSE}
 cafe_plot(K = 6)
 ```
+
+
+
 Note that here we have montly data, which can in fact easily be handled by a Seasonal ARIMA model. We now look at an example where Fourier terms help a lot: An example with \textbf{weekly data} with non-integer seasonality.
 
 
 ## Example: weekly gasoline products
-\fontsize{8}{8}\sf
 
 After some trying around we set $K=6$:
 ```{r gasmodel, echo=TRUE, cache=FALSE}

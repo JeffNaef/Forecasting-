@@ -15,6 +15,8 @@ library(scoringRules)
 set.seed(2)
 ```
 
+We again load the google data:
+
 ```{r}
 google_2018 <- gafa_stock |>
   filter(Symbol == "GOOG", year(Date) == c(2018) )
@@ -22,6 +24,22 @@ google_2018 |>
   autoplot(Close) +
   labs(y = "Closing stock price ($USD)")
 ```
+
+
+Now as mentioned in the lecture we have some problems with the Dates because they are irregular (no trading on weekends). However it is safe to assume that time between events (i.e. observation of prices) does \textbf{not hold information} and we do not want to model this actively. As such we simply transform the Dates to $\{1,\ldots,T\}$, as discussed in the lecture (using ``mutate''):
+
+```{r}
+google_2018 <- gafa_stock |>
+  filter(Symbol == "GOOG", year(Date) == 2018) |>
+  mutate(Date = row_number())
+
+google_2018 |>
+  autoplot(Close) +
+  labs(y = "Closing stock price ($USD)")
+```
+
+Notice how now we have numbers instead of dates.
+
 
 We see a series that seems quite eradic. To understand it better, we plot the autocorrelation function (acf):
 
@@ -43,11 +61,17 @@ google_2018 |>
 ## Split into train and test data
 
 ```{r}
-n<-length(google_2018$Close)
-H<-20  ## How many steps ahead?
-traindata<-google_2018$Close[1:(n-H)]
-testdata<-google_2018$Close[(n-(H-1)):n]
-ntrain<-length(traindata)
+## Split into train and test data
+n <- nrow(google_2018)
+H <- 10 #20  ## How many steps ahead?
+
+# Create train and test sets as tsibbles
+train_data <- google_2018 |> 
+  slice(1:(n - H))
+
+test_data <- google_2018 |> 
+  slice((n - H + 1):n)
+
 ```
 
 
@@ -56,49 +80,83 @@ ntrain<-length(traindata)
 ## Fit and Predict an AR(1) model on data
 
 ```{r}
-library(forecast)
-
-# Fit AR(1) - treats it as a simple numeric vector
-ar1_model <- Arima(traindata, order = c(1, 0, 0))
+## Fit and Predict an AR(1) model using fable
+ar1_fit <- train_data |>
+  model(ar1 = AR(Close ~ order(1)))
 
 # Forecast
-predictions <- forecast(ar1_model, h = H)
-
-test_ts <- ts(testdata, start = ntrain + 1, end = ntrain + length(testdata))
+ar1_forecast <- ar1_fit |>
+  forecast(h = H)
 
 # Plot
-autoplot(predictions) +
-  autolayer(test_ts, color = "red", size = 1) +
+ar1_forecast |>
+  autoplot(train_data) +
+  autolayer(test_data, Close, color = "red", linewidth = 1) +
   labs(title = "AR(1) Forecast", y = "Close Price")
-
-
-##Continue here, add Winkler score!!!
-
-traindata |> Arima(traindata, order = c(1, 0, 0)) |> accuracy(google_stock, list(winkler = winkler_score), level = 80)
-
-
-## CRPS/Energy distance values
-ARsim <- replicate(100, {
-  simulate(predictions$model, nsim = H, future = TRUE, bootstrap = FALSE)
-})
-crps_values <- numeric(H)
-for(i in 1:H) {
-  crps_values[i] <- crps_sample(y = testdata[i], 
-                               dat = ARsim[i, ])
-}
-
-# Mean CRPS across all forecast horizons
-mean_crps_AR <- mean(crps_values)
 
 
 ```
 
+
+```{r}
+# Accuracy on training data
+ar1_fit |> 
+  accuracy()
+
+
+# Accuracy on test data, including CRPS
+ar1_forecast |> 
+  accuracy(test_data,measures = list(CRPS = CRPS, RMSE = RMSE, MAE = MAE))
+
+```
+
+We now use a ``manual'' implementation to calculate the CRPS score, using the function ``crps_sample'':
+
+```{r}
+## Manual CRPS/Energy distance values using fable's generate function
+## Continue here!!
+
+## Extract and sample from forecast distributions directly
+crps_values <- numeric(H)
+
+for(i in 1:H) {
+  # Get the distribution for horizon i
+  forecast_dist <- ar1_forecast$Close[[i]]
+  
+  # Generate N=100 samples from this distribution
+  samplesi <- distributional::generate(forecast_dist, times = 100)[[1]]
+  
+  crps_values[i] <- crps_sample(y = test_data$Close[i], 
+                                dat =samplesi)
+  
+}
+```
+
+
+```{r}
+# Mean CRPS across all forecast horizons
+mean_crps_AR <- mean(crps_values)
+
+ar1_forecast |> 
+  accuracy(test_data,measures = list(CRPS = CRPS, RMSE = RMSE, MAE = MAE))
+
+
+mean_crps_AR
+```
+
+
+We see that our manual implementation of the CRPS/Energy Distance is very similar to the one provided by fable!
 
 ## Fit and Predict DRF on data
 
 ```{r}
 library(drf)
 source("drfown.R")
+
+traindata <- train_data$Close
+testdata <- test_data$Close
+ntrain <- length(traindata)
+
 X<-as.matrix(traindata[1:(ntrain-1)])
 Y<-as.matrix(traindata[2:ntrain])
 

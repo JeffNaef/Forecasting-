@@ -270,51 +270,6 @@ p2 <- ar2_data |>
 print(p2)
 ```
 
-## AR(2) Roots and Behavior
-
-```{r ar2_roots}
-# Function to find characteristic roots
-find_ar2_roots <- function(phi1, phi2) {
-  # Characteristic equation: 1 - phi1*z - phi2*z^2 = 0
-  # Rearranged: phi2*z^2 + phi1*z - 1 = 0
-  discriminant <- phi1^2 + 4*phi2
-  
-  if (discriminant >= 0) {
-    # Real roots
-    root1 <- (-phi1 + sqrt(discriminant)) / (2*phi2)
-    root2 <- (-phi1 - sqrt(discriminant)) / (2*phi2)
-    return(list(root1 = root1, root2 = root2, type = "real", discriminant = discriminant))
-  } else {
-    # Complex roots
-    real_part <- -phi1 / (2*phi2)
-    imag_part <- sqrt(-discriminant) / (2*phi2)
-    modulus <- sqrt(real_part^2 + imag_part^2)
-    frequency <- atan2(imag_part, real_part) / (2*pi)
-    return(list(real_part = real_part, imag_part = imag_part, 
-                modulus = modulus, frequency = frequency, type = "complex", discriminant = discriminant))
-  }
-}
-
-# Analyze roots for each AR(2) configuration
-roots_analysis <- tibble()
-for (i in 1:length(ar2_configs)) {
-  config <- ar2_configs[[i]]
-  roots <- find_ar2_roots(config$phi1, config$phi2)
-  
-  roots_analysis <- bind_rows(roots_analysis, 
-    tibble(
-      series = config$name,
-      phi1 = config$phi1,
-      phi2 = config$phi2,
-      root_type = roots$type,
-      discriminant = roots$discriminant
-    ))
-}
-
-print("AR(2) Roots Analysis:")
-print(roots_analysis)
-```
-
 ## AR(2) Autocorrelation Patterns
 
 ```{r ar2_acf_patterns}
@@ -362,72 +317,115 @@ for (i in 1:length(series_names)) {
   plot_annotation(title = "AR(2) Partial Autocorrelation Functions")
 ```
 
-## AR(2) Stationarity Region
+## Estimation of AR(2)
 
-```{r ar2_stationarity_region}
-# Create stationarity triangle for AR(2)
-phi1_range <- seq(-2, 2, by = 0.05)
-phi2_range <- seq(-1, 1, by = 0.05)
+We now estimate the Parameters of the AR(2) process using the conditional likelihood/regression appraoch from the slides:
 
-stationarity_grid <- expand_grid(phi1 = phi1_range, phi2 = phi2_range) |>
+```{r ar2_ols_estimation}
+# Function to estimate AR(2) using OLS
+estimate_ar2_ols <- function(y) {
+  n <- length(y)
+  p <- 2  # AR(2) model
+  
+  # Construct Y vector (observations from t=p+1 to T)
+  Y <- y[(p+1):n]
+  
+  # Construct F matrix (design matrix)
+  F_matrix <- matrix(0, nrow = n - p, ncol = p)
+  for (i in 1:(n - p)) {
+    F_matrix[i, ] <- c(y[p + i - 1], y[p + i - 2])
+  }
+  
+  # OLS estimation: phi_hat = (F'F)^{-1} F'Y
+  phi_hat <- solve(t(F_matrix) %*% F_matrix) %*% t(F_matrix) %*% Y
+  
+  # Calculate residuals
+  residuals <- Y - F_matrix %*% phi_hat
+  
+  # Estimate sigma^2
+  sigma2_hat <- var(residuals)
+  
+  # Optinal: Standard errors (using variance-covariance matrix)
+  var_cov_matrix <- as.numeric(sigma2_hat) * solve(t(F_matrix) %*% F_matrix)
+  se <- sqrt(diag(var_cov_matrix))
+  
+  return(list(
+    phi_hat = as.vector(phi_hat),
+    se = se,
+    sigma2_hat = sigma2_hat,
+    residuals = residuals
+  ))
+}
+
+# Estimate parameters for each AR(2) configuration
+estimation_results <- tibble()
+
+for (i in 1:length(ar2_configs)) {
+  config <- ar2_configs[[i]]
+  
+  # Get the simulated data for this configuration
+  y_data <- ar2_data |> 
+    filter(series == config$name) |>
+    pull(y)
+  
+  # Estimate
+  est <- estimate_ar2_ols(y_data)
+  
+  # Store results
+  estimation_results <- bind_rows(estimation_results,
+    tibble(
+      series = config$name,
+      true_phi1 = config$phi1,
+      true_phi2 = config$phi2,
+      estimated_phi1 = est$phi_hat[1],
+      estimated_phi2 = est$phi_hat[2],
+      se_phi1 = est$se[1],
+      se_phi2 = est$se[2],
+      sigma2_hat = est$sigma2_hat
+    ))
+}
+
+# Display results
+cat("\n=== AR(2) OLS Estimation Results ===\n\n")
+print(estimation_results |> 
+  select(series, true_phi1, estimated_phi1, se_phi1, true_phi2, estimated_phi2, se_phi2))
+```
+
+
+We see that the parameter estimates are very accurate! We also obtained an optional uncertainty estimation not discussed in the lecture:
+
+```{r ar2_ols_estimation2}
+
+##Plots:
+
+
+# Create confidence interval plot
+ci_data <- estimation_results |>
   mutate(
-    condition1 = phi1 + phi2 < 1,
-    condition2 = phi2 - phi1 < 1,
-    condition3 = abs(phi2) < 1,
-    stationary = condition1 & condition2 & condition3
+    ci_lower_phi1 = estimated_phi1 - 1.96 * se_phi1,
+    ci_upper_phi1 = estimated_phi1 + 1.96 * se_phi1,
+    ci_lower_phi2 = estimated_phi2 - 1.96 * se_phi2,
+    ci_upper_phi2 = estimated_phi2 + 1.96 * se_phi2
+  ) |>
+  pivot_longer(cols = c(estimated_phi1, estimated_phi2),
+               names_to = "parameter", values_to = "estimate") |>
+  mutate(
+    true_value = ifelse(parameter == "estimated_phi1", true_phi1, true_phi2),
+    ci_lower = ifelse(parameter == "estimated_phi1", ci_lower_phi1, ci_lower_phi2),
+    ci_upper = ifelse(parameter == "estimated_phi1", ci_upper_phi1, ci_upper_phi2),
+    phi_label = ifelse(parameter == "estimated_phi1", "phi_1", "phi_2")
   )
 
-# Add our simulated points
-sim_points <- tibble(
-  phi1 = c(0.7, 0.5, 1.0, 0.1),
-  phi2 = c(0.2, -0.3, -0.6, 0.8),
-  series = c("Config 1", "Config 2", "Config 3", "Config 4")
-)
-
-p_stationarity_region <- ggplot(stationarity_grid, aes(x = phi1, y = phi2)) +
-  geom_raster(aes(fill = stationary), alpha = 0.7) +
-  geom_point(data = sim_points, aes(color = series), size = 4) +
-  scale_fill_manual(values = c("FALSE" = "red", "TRUE" = "lightblue"),
-                    name = "Stationary", labels = c("No", "Yes")) +
-  scale_color_viridis_d(name = "Our Simulations") +
-  labs(title = "AR(2) Stationarity Region",
-       subtitle = "Blue = Stationary, Red = Non-stationary",
-       x = "φ₁", y = "φ₂") +
+p_ci <- ggplot(ci_data, aes(x = series, y = estimate)) +
+  geom_point(size = 3, color = "coral") +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2, color = "coral") +
+  geom_point(aes(y = true_value), size = 3, color = "steelblue", shape = 17) +
+  facet_wrap(~phi_label, scales = "free_y") +
+  labs(title = "AR(2) Parameter Estimates with 95% Confidence Intervals",
+       subtitle = "Circles = Estimates, Triangles = True Values",
+       x = "", y = "Parameter Value") +
   theme_minimal() +
-  coord_cartesian(xlim = c(-2, 2), ylim = c(-1, 1))
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8)) +
+  coord_flip()
 
-print(p_stationarity_region)
-```
-
-
-
-```{r summary_statistics}
-# Summary statistics for all simulated processes
-summary_stats <- bind_rows(
-  ar1_data |> 
-    group_by(series) |>
-    summarise(
-      mean = mean(y),
-      variance = var(y),
-      min = min(y),
-      max = max(y),
-      .groups = "drop"
-    ) |>
-    mutate(process_type = "AR(1)"),
-  
-  ar2_data |>
-    group_by(series) |>
-    summarise(
-      mean = mean(y),
-      variance = var(y),
-      min = min(y),
-      max = max(y),
-      .groups = "drop"
-    ) |>
-    mutate(process_type = "AR(2)")
-)
-
-print("Summary Statistics for All Simulated AR Processes:")
-print(summary_stats)
-```
-
+print(p_ci)

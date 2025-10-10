@@ -264,7 +264,7 @@ library(ggplot2)
 autoplot(ar1_forecast)
 ```
 
-Now we do the same using the nice fable package:
+Now we do the same using the nice fable package. Now as mentioned in the lecture we have some problems with the Dates because they are irregular (no trading on weekends). However it is safe to assume that time between events (i.e. observation of prices) does \textbf{not hold information} and we do not want to model this actively. As such we simply transform the Dates to $\{1,\ldots,T\}$, as discussed in the lecture (using ``mutate''):
 
 ```{r}
 # First make the time series regular (basically map to {1,...,T})

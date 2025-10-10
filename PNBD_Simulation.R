@@ -10,23 +10,25 @@ simulate_pnbd <- function(n_customers,
                           beta, s,      # Gamma parameters for M0 (transaction rate)
                           alpha, r,     # Gamma parameters for Lambda0 (dropout rate) 
                           start_date = as.Date("2005-01-01"),
-                          observation_period = 365) {
+                          observation_period = 208) {
   
   cat("Simulating", n_customers, "customers from Pareto/NBD model...\n")
   
   # Step 1: Draw M0 from gamma distribution Gam(beta, s)
   # Using shape-rate parameterization: shape=s, rate=beta
   M0 <- rgamma(n_customers, shape = s, rate = beta)
-  cat("Step 1: Generated transaction rates M0 from Gam(", beta, ",", s, ")\n")
+  cat("Step 1: Generated dropout rates M0 from Gam(", beta, ",", s, ")\n")
+ 
+
   
   # Step 2: Draw Lambda0 from gamma distribution Gam(alpha, r)  
   # Using shape-rate parameterization: shape=r, rate=alpha
   Lambda0 <- rgamma(n_customers, shape = r, rate = alpha)
-  cat("Step 2: Generated dropout rates Lambda0 from Gam(", alpha, ",", r, ")\n")
+  cat("Step 2: Generated transaction rates Lambda0 from Gam(", alpha, ",", r, ")\n")
   
   # Step 3: For each customer, draw their unobserved lifetime Omega ~ Exp(Lambda0)
-  Omega <- rexp(n_customers, rate = Lambda0)
-  cat("Step 3: Generated customer lifetimes Omega ~ Exp(Lambda0)\n")
+  Omega <- rexp(n_customers, rate = M0)
+  cat("Step 3: Generated customer lifetimes Omega ~ Exp(M0)\n")
   
   # Step 4: Generate transaction time points T_j starting from zero
   cat("Step 4: Generating transaction time points T_j...\n")
@@ -42,7 +44,7 @@ simulate_pnbd <- function(n_customers,
     active_period <- min(Omega[i], observation_period)
     
     # Generate transaction time points T_j by cumulating inter-transaction times
-    # Inter-transaction times T_{j-1,j} ~ Exp(M0[i])
+    # Inter-transaction times T_{j-1,j} ~ Exp(Lambda0[i])
     # Transaction times T_j = sum_{l=1}^j T_{l-1,l} (starting from T_0 = 0)
     
     transaction_times <- c()  # Will store the actual transaction times T_j
@@ -50,7 +52,7 @@ simulate_pnbd <- function(n_customers,
     
     repeat {
       # Generate next inter-transaction time T_{j-1,j} ~ Exp(M0[i])
-      inter_transaction_time <- rexp(1, rate = M0[i])
+      inter_transaction_time <- rexp(1, rate = Lambda0[i])
       
       # Calculate next transaction time T_j = T_{j-1} + T_{j-1,j}
       next_transaction_time <- current_time + inter_transaction_time
@@ -68,9 +70,9 @@ simulate_pnbd <- function(n_customers,
     # Convert transaction times to dates and create transaction records
     if (length(transaction_times) > 0) {
       for (j in 1:length(transaction_times)) {
-        transaction_date <- start_date + days(round(transaction_times[j]))
+        transaction_date <- start_date + days( round(transaction_times[j]*7))
         
-        # Generate a realistic transaction amount
+        # Generate a realistic transaction amount (need to change this!!!)
         transaction_amount <- round(rlnorm(1, meanlog = 3, sdlog = 0.5), 2)
         
         customer_transactions <- rbind(customer_transactions, 
@@ -105,13 +107,13 @@ set.seed(123)  # For reproducible results
 
 # Simulate 600 customers (matching the example data)
 simulated_data <- simulate_pnbd(
-  n_customers = 600,
-  beta = 2,      # Rate parameter for transaction rate (higher = lower transaction rates)
-  s = 1,         # Shape parameter for transaction rate  
-  alpha = 1,     # Rate parameter for dropout rate (higher = higher dropout)
-  r = 1,         # Shape parameter for dropout rate
+  n_customers = 8000,
+  beta = 20,      # Rate parameter for transaction rate (higher = lower transaction rates)
+  s = 2,         # Shape parameter for transaction rate  
+  alpha = 8,     # Rate parameter for dropout rate (higher = higher dropout)
+  r = 3,         # Shape parameter for dropout rate
   start_date = as.Date("2005-01-01"),
-  observation_period = 365  # One year observation period
+  observation_period = 208  # One year observation period
 )
 
 # Display the results
@@ -153,3 +155,36 @@ cat("\nData is ready for CLVTools! Format matches apparelTrans structure:\n")
 cat("- Id: Character vector with customer IDs\n")
 cat("- Date: Date vector with transaction dates\n") 
 cat("- Price: Numeric vector with transaction amounts\n")
+
+
+
+
+
+
+
+
+
+
+
+### Estimation ##################
+
+
+
+
+library(CLVTools)
+
+clv.sim <- clvdata(simulated_data,  
+                       date.format="ymd", 
+                       time.unit = "week",
+                       estimation.split = 104,
+                       name.id = "Id",
+                       name.date = "Date",
+                       name.price = "Price")
+
+
+est.pnbd <- latentAttrition(formula = , family = pnbd, data=clv.sim)
+est.pnbd
+
+
+
+
