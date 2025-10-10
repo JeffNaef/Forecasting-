@@ -3,15 +3,17 @@ rm(list=ls())
 # Install and load required packages
 # install.packages("dCovTS")
 library(dCovTS)
-
+library(energy)
 # Theoretical distance correlation formula from Székely et al. 
 # MEASURING AND TESTING DEPENDENCE BY CORRELATION OF DISTANCES
+
 theoretical_dcor <- function(rho) {
   # rho = 0
   numerator <- rho * asin(rho) + sqrt(1 - rho^2) - rho * asin(rho / 2) - sqrt(4 - rho^2) + 1
   denominator <- 1 + pi/3 - sqrt(3)
   return(sqrt(numerator / denominator))
 }
+
 # empirical autocovariance
 empirical_autocov <- function(x, lag.max = 20) {
   n <- length(x)
@@ -20,6 +22,7 @@ empirical_autocov <- function(x, lag.max = 20) {
     sum((x[1:(n-h)] - x_bar)*(x[(1+h):n] - x_bar)) / n
   })
 }
+
 # Function to compute empirical autocorrelation manually
 empirical_autocor <- function(x, lag.max = 20) {
   acov <- empirical_autocov(x, lag.max)
@@ -103,7 +106,7 @@ legend("topright", legend=c("Empirical", "Theoretical"), col=c("red","blue"),
 
 phi <- 0.7
 sigma_ar1 <- 2
-n <- 500
+n <- 1000
 eps_ar1 <- rnorm(n, 0, sigma_ar1)
 X_ar1 <- numeric(n)
 
@@ -157,7 +160,7 @@ legend("topright", legend=c("Empirical","Theoretical"), col=c("red","blue"),
 #------------------------------------------------- Exercice 3
 
 
-n <- 500
+n <- 1000
 theta <- 0.5
 sigma_ma1 <- 2
 

@@ -339,4 +339,53 @@ legend("topleft",bty="n", legend=c("True","Manual","STL"), col=cols, lty=c(1,2,3
 par(mfrow=c(1,1))
 
 
+# ------------------- little pedagogical example for loess regression
+
+# Sample data
+set.seed(1)
+n <- 500
+x <- sort(runif(n, 0, 10))
+sd_eps =  .15
+y <- .3*sin(x) + rnorm(n, sd =sd_eps)   # underlying curve + noise
+plot(x,y)
+lines(x, .3*sin(x), col="green", lwd=2)
+
+manual_loess <- function(x, y, alpha = 0.5, degree = 1) {
+  n <- length(x)
+  yhat <- numeric(n)
+  m <- ceiling(alpha * n)
+  
+  for (i in 1:n) {
+    x0 <- x[i]
+    
+    # 1. Distances
+    d <- abs(x - x0)
+    # 2. m-th nearest distance
+    D <- sort(d)[m]
+    # 3. tricube weights
+    w <- ifelse(d <= D, (1 - (d / D)^3)^3, 0)
+    
+    # 4. Weighted linear regression centered at x0
+    X <- sapply(0:degree, function(p) (x - x0)^p)
+    W <- diag(w)
+    XtW <- t(X) %*% W
+    beta <- solve(XtW %*% X) %*% XtW %*% y
+    
+    # 5. Prediction at x0 (intercept)
+    yhat[i] <- beta[1]
+  }
+  
+  return(yhat)
+}
+
+plot(x,y)
+alpha=.01
+deg=1
+yhat_loess_1 = manual_loess(x,y, alpha = alpha, degree = deg)
+lines(x, yhat_loess_1, col="red", lwd=2)
+fit_loess_1_implemented  = loess(y ~ x, span = alpha, family = "gaussian", degree = deg)  
+yhat_loess_1_implemented = predict(fit_loess_1_implemented, newdata = data.frame(x=x))
+lines(x,yhat_loess_1_implemented , col="blue", lwd=2, lty=2)
+range(yhat_loess_1- yhat_loess_1_implemented)
+plot(x = yhat_loess_1, y = yhat_loess_1_implemented)
 
