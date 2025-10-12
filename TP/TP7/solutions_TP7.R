@@ -39,7 +39,7 @@ simulate_arima <- function(n, p = 0, d = 0, q = 0, phi = NULL, theta = NULL, sig
   # X_t = ε_t + θ_1 ε_{t-1} + ... + θ_q ε_{t-q}
   # -------------------------------------------
   if (q > 0) {
-    x <- filter(x, c(1, theta), sides = 1)
+    x <- stats::filter(x, c(1, theta), sides = 1)
     # zero out initial transient values
     x[seq_len(q)] <- 0
   }
@@ -49,7 +49,7 @@ simulate_arima <- function(n, p = 0, d = 0, q = 0, phi = NULL, theta = NULL, sig
   # (1 - φ_1 B - ... - φ_p B^p) X_t = ε_t + ...
   # -------------------------------------------
   if (p > 0) {
-    x <- filter(x, phi, method = "recursive")
+    x <- stats::filter(x, phi, method = "recursive")
   }
   
   # -------------------------------------------
@@ -103,8 +103,6 @@ acf_theo <- ARMAacf(ar = phi, ma = theta, lag.max = lags)
 plot(x = 0:lags, y = acf_theo, type="l")
 lines(x = 0:lags, y = emp_cov_custom, col = "red", lty = 2)
 lines(x = 0:lags, y = emp_cov_builtin, col = "red", lty = 2)
-
-
 
 
 # ------------------------ ex2
