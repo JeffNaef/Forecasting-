@@ -292,12 +292,12 @@ arima_fit |>
 
 # ------------------------------ ex3
 
-# Choose *Electricity* time series *aus_production*.
+# Choose the *Electricity* time series *aus_production*.
 
 # 1. Do the data need transforming? If so, find a suitable transformation.
 
 aus_production |> 
-  autoplot(Electricity)  #Yes, these need transforming.
+  autoplot(Electricity)  #Yes, these need transforming, as the effect of seasonality appears to increase.
 
 lambda <- aus_production |>
   features(Electricity, guerrero) |>
