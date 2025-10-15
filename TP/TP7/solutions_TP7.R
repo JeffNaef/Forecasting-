@@ -71,6 +71,51 @@ simulate_arima <- function(n, p = 0, d = 0, q = 0, phi = NULL, theta = NULL, sig
 
 
 
+simulate_arima <- function(Y0, eps0, N, phi, theta, sigma) {
+  #' Simulate T observations from an ARMA(1,1) process
+  #' 
+  #' The ARMA(1,1,1) model is:
+  #' X_t = phi * X_{t-1} + eps_t + theta * eps_{t-1}
+  #' where X_t=(1-B)Y_t.
+  #' 
+  #' where eps_t ~ N(0, sigma^2)
+  #' 
+  #'  Y0 Starting value for Y at time 0
+  #'  eps0 Starting value for innovation at time 0
+  #'  T Number of observations to simulate
+  #'  phi AR(1) coefficient
+  #'  theta MA(1) coefficient
+  #'  sigma Standard deviation of the innovation process
+  #' 
+  #' Return: A list containing:
+  #'   Y: vector of T simulated values
+  #'   eps: vector of T innovation values
+  
+  # Initialize vectors
+  Y <- numeric(N)
+  eps <- numeric(N)
+  
+  # Generate innovations from N(0, sigma^2)
+  eps <- rnorm(N, mean = 0, sd = sigma)
+  
+  # Simulate ARMA(1,1) process
+  for (t in 1:N) {
+    if (t == 1) {
+      Y[t] <- phi * Y0 + eps[t] + theta * eps0
+    } else {
+      Y[t] <- phi * Y[t-1] + eps[t] + theta * eps[t-1]
+    }
+  }
+  
+  # Obtain ARIMA(1,1,1)
+  X<-cumsum(Y)
+  
+  return(list(X = X, eps = eps))
+}
+
+
+
+## Need to adapt the solution###########
 
 # check 
 set.seed(123)
@@ -126,6 +171,15 @@ aus_arrivals |>
 
 # 2. What can you learn from the ACF and PACF graphs? See https://otexts.com/fpp3/seasonal-arima.html
 
+# The seasonal part of an AR or MA model will be seen in the seasonal lags of the PACF and ACF. For example, an ARIMA(0,0,0)(0,0,1)_{12}
+# model will show:
+# - a spike at lag 12 in the ACF but no other significant spikes;
+# - exponential decay in the seasonal lags of the PACF (i.e., at lags 12, 24, 36, …).
+# Similarly, an ARIMA(0,0,0)(1,0,0)_{12} model will show:
+# - exponential decay in the seasonal lags of the ACF;
+# - a single significant spike at lag 12 in the PACF.
+# In considering the appropriate seasonal orders for a seasonal ARIMA model, restrict attention to the seasonal lags.
+
 aus_arrivals |>
   filter(Origin == "Japan") |>
   gg_tsdisplay(plot_type = "partial")
@@ -143,6 +197,7 @@ aus_arrivals |>
   autoplot(Arrivals |> difference(lag=4) |> 
              difference())
 
+
 # KPSS test
 aus_arrivals |>
   filter(Origin == "Japan") |>
@@ -155,9 +210,9 @@ aus_arrivals |>
            difference()) |>  # seasonal and first difference
   features(diff, unitroot_kpss)
 
-# At alpha= 0.05, we do not have evidence against stationarity.
+# At alpha= 0.05, we do not have evidence against stationarity for both differencing steps.
 
-# 4. Make the ACF and PACF graphs of the differenced data. 
+# 4. Plot the ACF and PACF graphs of the differenced data. 
 # Explain/make a guess what would be the corresponding model for the original time series.
 
 aus_arrivals |>
@@ -174,6 +229,7 @@ aus_arrivals |>
 #  - The non-seasonal lags might suggest an AR(1) component. But the lag 2 spike in the PACF is larger than the lag 2 spike in the ACF. So an MA(1) is probably better.
 # - The seasonal lags show geometric decay which is consistent with a seasonal MA(1).
 # - The suggested model is an ARIMA(0,1,1)(0,1,1).
+
 
 # 5. Use the function ARIMA() to run an automatic selection procedure of the model. 
 # Does it give the same model that you chose? If not, which model do you think is better?
@@ -203,11 +259,22 @@ arima_fit |>
   select(guess) |>
   gg_tsresiduals()
 
-arima_fit |>
+resids <- arima_fit |>
   select(auto) |>
-  gg_tsresiduals()
+  residuals()
 
 # For both models, there is still autocorrelation (e.g., at lag 6) and probably the residual variance is not totally stable.
+
+## We can also check the distance autocorrelation:
+arima_fit |>
+  select(auto) |>
+  residuals() |>
+  pull(.resid) |>
+  na.omit() |>
+  ADCFplot()
+
+# Where unsurprisingly, a similar picture emerges.
+
 
 # 7. Write the model in terms of the backshift operator, then without using the backshift operator.
 
