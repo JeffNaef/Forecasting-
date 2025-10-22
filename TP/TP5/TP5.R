@@ -1,10 +1,10 @@
+# clean ws
 rm(list=ls())
 
+# pkg
 library(forecast)
+
 # ex01 generate from arma 1 0 1, fit model on train, parametric bootstrap sample path, compute mean and quantile on these, plot, compute score for both prediction, report score
-
-
-
 
 simulate_arma11 <- function(Y0, eps0, N, phi, theta, sigma) {
   #' Simulate T observations from an ARMA(1,1) process
@@ -74,6 +74,7 @@ fit <- Arima(y_train, order = c(1,0,1), include.mean = FALSE)
 B <- 500  # number of bootstrap paths
 boot_preds <- matrix(NA, nrow = h, ncol = B)
 
+# generate paths
 for(b in 1:B){
   #boot_path <- simulate(fit, nsim = h, bootstrap = TRUE)
   #boot_preds[,b] <- boot_path
@@ -94,8 +95,6 @@ lines(y[1:n_train])
 for(b in 1:B){
   lines(n_train + 1:h, boot_preds[,b], col=rgb(0,0,0,alpha=0.05))
 }
-
-
 
 # quantile forecast band
 lines(n_train + 1:h, pred_q_upper, col="red", lwd=2, lty=2)
@@ -236,24 +235,3 @@ colnames(mat_results) <- c("RMSE_AR1", "RMSE_AR2", "MAE_AR1", "MAE_AR2", "QS80_A
 boxplot(mat_results[,1:2], main = "RMSE comparison AR1 vs AR2", names = c("AR1", "AR2"))
 boxplot(mat_results[,3:4], main = "MAE comparison AR1 vs AR2", names = c("AR1", "AR2"))
 boxplot(mat_results[,5:6], main = "QS80 comparison AR1 vs AR2", names = c("AR1", "AR2"))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
