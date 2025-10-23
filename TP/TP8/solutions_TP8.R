@@ -4,10 +4,16 @@
 rm(list=ls())
 
 # pkg
+
+
 library(fpp3)
 library(xlsx)
 library(ggplot2)
 library(fpp2)
+library(tsibble)
+library(fable)
+library(fabletools)
+library(dplyr)
 
 # ---------------- ex1
 
@@ -54,7 +60,7 @@ paperback <- books[,1]
 
 help("ses")
 
-par(mfrow=c(2,2))
+par(mfrow=c(1,2))
 
 for(i in seq(0.01, 0.99, 0.1)){
   
@@ -137,6 +143,7 @@ summary(model.holt)
 
 plot(model.holt)
 lines(fitted(model.holt), lwd=2, col="red")
+
 
 
 # 2. A holt’s model with damped trend (see options in ?holt). 
