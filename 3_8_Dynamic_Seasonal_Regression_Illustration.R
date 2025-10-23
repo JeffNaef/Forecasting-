@@ -63,7 +63,9 @@ fit_harmonic <- function(Y, t, s, K) {
     X[, 2 + 2*k] <- cos(2 * pi * k * t / s)      # c_k(t)
   }
   
-  # Fit linear model
+  # Fit linear model; This is simply the regression coefficient we looked at!!
+  # beta= (X'X)^{-1}X'Y
+  # inv(X%*%X)%*%t(X)%*%Y
   model <- lm(Y ~ X - 1)
   fitted_values <- fitted(model)
   
