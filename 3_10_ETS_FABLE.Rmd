@@ -1,19 +1,5 @@
 ---
 title: "8. Exponential smoothing"
-author: "8.7 Forecasting with ETS models"
-date: "OTexts.org/fpp3/"
-classoption: aspectratio=169
-titlepage: fpp3title.png
-titlecolor: fpp3red
-toc: false
-output:
-  binb::monash:
-    colortheme: monashwhite
-    fig_width: 7.5
-    fig_height: 3
-    keep_tex: no
-    includes:
-      in_header: fpp3header.tex
 ---
 
 ```{r setup, include=FALSE}
