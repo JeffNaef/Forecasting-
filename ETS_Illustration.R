@@ -1,0 +1,581 @@
+# Exponential Smoothing Illustration with Series and Prediction Intervals
+set.seed(123)
+
+# Parameters
+n <- 100
+true_level0 <- 100
+alphatrue <- 0.4
+sd_error <- 10
+h <- 20  # forecast horizon
+
+# Generate data with a level shift
+errors <- rnorm(n, 0, sd_error)
+errors[50] <- 30  # Introduce a large error at t=50
+
+true_level <- c()
+# Generate observed series: Y_t = level_{t-1} + error_t
+Y <- numeric(n)
+Y[1] <- true_level0 + errors[1]
+
+for(t in 2:n) {
+  if (t==2){
+    true_level[t-1] = true_level0 + alphatrue*errors[t-1]
+  } else {
+    true_level[t-1] = true_level[t-2] + alphatrue*errors[t-1]  
+  }
+  Y[t] <- true_level[t-1] + errors[t]
+}
+
+# Function to apply exponential smoothing
+exp_smooth <- function(Y, alpha, initial_level) {
+  n <- length(Y)
+  level <- numeric(n + 1)
+  level[1] <- initial_level
+  
+  for(t in 1:n) {
+    error_t <- Y[t] - level[t]
+    level[t + 1] <- level[t] + alpha * error_t
+  }
+  
+  return(level[-1])  # Remove initial level
+}
+
+# Function to simulate h-step ahead forecasts and return prediction intervals
+simulate_forecast <- function(last_level, alpha, h, sd_error, n_sim=1000, prob=0.90) {
+  # Simulate multiple paths
+  forecast_paths <- matrix(NA, nrow=n_sim, ncol=h)
+  
+  for(sim in 1:n_sim) {
+    level <- last_level
+    for(step in 1:h) {
+      error <- rnorm(1, 0, sd_error)
+      y_forecast <- level + error
+      level <- level + alpha * error  # Update level based on alpha
+      forecast_paths[sim, step] <- y_forecast
+    }
+  }
+  
+  # Calculate prediction intervals
+  lower_prob <- (1 - prob) / 2
+  upper_prob <- 1 - lower_prob
+  
+  return(list(
+    mean = colMeans(forecast_paths),
+    median = apply(forecast_paths, 2, median),
+    lower = apply(forecast_paths, 2, quantile, lower_prob),
+    upper = apply(forecast_paths, 2, quantile, upper_prob),
+    lower_50 = apply(forecast_paths, 2, quantile, 0.25),
+    upper_50 = apply(forecast_paths, 2, quantile, 0.75),
+    all_paths = forecast_paths
+  ))
+}
+
+# Test different alpha values
+alphas <- c(0, 0.1, 0.3, 0.7, 1.0)
+results <- data.frame(time = 1:n, Y = Y)
+
+# Store forecasts
+forecasts <- list()
+
+for(a in alphas) {
+  level_col <- paste0("level_alpha_", a)
+  levels <- exp_smooth(Y, a, true_level0)
+  results[[level_col]] <- levels
+  
+  # Generate forecasts with prediction intervals
+  last_level <- levels[n]
+  forecasts[[as.character(a)]] <- simulate_forecast(last_level, a, h, sd_error, n_sim=1000, prob=0.90)
+}
+
+# Plotting
+par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
+
+# Define colors
+colors <- list("0" = "gray50", "0.1" = "blue", "0.3" = "green", 
+               "0.7" = "orange", "1" = "red")
+
+# Plot for each alpha
+plot_alphas <- c(0, 0.1, 0.3, 1.0)
+
+for(a in plot_alphas) {
+  # Extend x-axis to include forecast horizon
+  xlim_range <- c(1, n + h)
+  
+  # Calculate y-axis limits including forecasts
+  forecast_data <- forecasts[[as.character(a)]]
+  ylim_range <- range(c(Y, results[, grep("level", names(results))], 
+                        forecast_data$lower, forecast_data$upper))
+  
+  # Plot observed series
+  plot(1:n, Y, type = "l", pch = 20, col = "black", cex = 0.8,
+       xlab = "Time", ylab = "Value", 
+       main = bquote("α = " ~ .(a) ~ " with 90% Prediction Interval"),
+       xlim = xlim_range,
+       ylim = ylim_range)
+  
+  # Mark the large error
+  abline(v = 50, lty = 2, col = "darkred", lwd = 1.5)
+  abline(v = n, lty = 2, col = "gray30", lwd = 1)
+  text(n, ylim_range[1], "Forecast", pos = 4, col = "gray30", cex=0.8)
+  
+  # Add level line
+  level_col <- paste0("level_alpha_", a)
+  lines(1:n, results[[level_col]], col = colors[[as.character(a)]], lwd = 2)
+  
+  # Add forecast
+  forecast_times <- (n+1):(n+h)
+  
+  # Add 90% prediction interval (outer, lighter shade)
+  polygon(c(forecast_times, rev(forecast_times)),
+          c(forecast_data$lower, rev(forecast_data$upper)),
+          col = adjustcolor(colors[[as.character(a)]], alpha.f = 0.15),
+          border = NA)
+  
+  # Add 50% prediction interval (inner, darker shade)
+  polygon(c(forecast_times, rev(forecast_times)),
+          c(forecast_data$lower_50, rev(forecast_data$upper_50)),
+          col = adjustcolor(colors[[as.character(a)]], alpha.f = 0.3),
+          border = NA)
+  
+  # Add median forecast
+  lines(forecast_times, forecast_data$median, 
+        col = colors[[as.character(a)]], lwd = 2.5, lty = 1)
+  
+  # Connect last level to first forecast
+  lines(c(n, n+1), c(results[[level_col]][n], forecast_data$median[1]),
+        col = colors[[as.character(a)]], lwd = 2.5, lty = 1)
+  
+  # # Add legend
+  # legend("topright", 
+  #        legend = c("Observed", "Fitted level", "Forecast median", "50% PI", "90% PI"),
+  #        col = c("black", colors[[as.character(a)]], colors[[as.character(a)]], 
+  #                colors[[as.character(a)]], colors[[as.character(a)]]),
+  #        lwd = c(1, 2, 2.5, NA, NA),
+  #        lty = c(1, 1, 1, NA, NA),
+  #        pch = c(NA, NA, NA, 15, 15),
+  #        pt.cex = c(NA, NA, NA, 2, 2),
+  #        fill = c(NA, NA, NA, 
+  #                 adjustcolor(colors[[as.character(a)]], alpha.f = 0.3),
+  #                 adjustcolor(colors[[as.character(a)]], alpha.f = 0.15)),
+  #        border = c(NA, NA, NA, NA, NA),
+  #        cex = 0.65,
+  #        bg = "white")
+}
+
+
+
+#######################
+# Exponential Smoothing with Trend - Illustration
+#######################
+set.seed(123)
+
+# Parameters
+n <- 100
+true_level0 <- 100
+true_trend0 <- 0.5  # Initial trend
+alphatrue <- 0#0.3
+betatrue <- 0.8
+phi_true <- 0.95  # damping parameter (your 'b')
+sd_error <- 10
+h <- 20  # forecast horizon
+
+# Generate data with trend
+errors <- rnorm(n, 0, sd_error)
+errors[50] <- 30  # Introduce a large error at t=50
+
+true_level <- numeric(n)
+true_trend <- numeric(n)
+Y <- numeric(n)
+
+# Initialize
+Y[1] <- true_level0 + true_trend0 + errors[1]
+true_level[1] <- true_level0 + true_trend0 + alphatrue * errors[1]
+true_trend[1] <- phi_true * true_trend0 + betatrue * errors[1]
+
+# Generate the series
+for(t in 2:n) {
+  Y[t] <- true_level[t-1] + phi_true * true_trend[t-1] + errors[t]
+  true_level[t] <- true_level[t-1] + phi_true * true_trend[t-1] + alphatrue * errors[t]
+  true_trend[t] <- phi_true * true_trend[t-1] + betatrue * errors[t]
+}
+
+# Function to apply exponential smoothing with trend
+exp_smooth_trend <- function(Y, alpha, beta, phi, initial_level, initial_trend) {
+  n <- length(Y)
+  level <- numeric(n + 1)
+  trend <- numeric(n + 1)
+  level[1] <- initial_level
+  trend[1] <- initial_trend
+  
+  for(t in 1:n) {
+    error_t <- Y[t] - (level[t] + phi * trend[t])
+    level[t + 1] <- level[t] + phi * trend[t] + alpha * error_t
+    trend[t + 1] <- phi * trend[t] + beta * error_t
+  }
+  
+  return(list(level = level[-1], trend = trend[-1]))
+}
+
+# Function to simulate h-step ahead forecasts with trend
+simulate_forecast_trend <- function(last_level, last_trend, alpha, beta, phi, h, sd_error, n_sim=1000, prob=0.90) {
+  forecast_paths <- matrix(NA, nrow=n_sim, ncol=h)
+  
+  for(sim in 1:n_sim) {
+    level <- last_level
+    trend <- last_trend
+    
+    for(step in 1:h) {
+      # Calculate damped trend component for forecast
+      phi_sum <- sum(phi^(1:step))  # Sum of damped trends
+      
+      error <- rnorm(1, 0, sd_error)
+      # Y_t = level + phi*trend + error (for one step ahead)
+      # For h steps: level + trend*(phi + phi^2 + ... + phi^h)
+      if(step == 1) {
+        y_forecast <- level + phi * trend + error
+      } else {
+        # This is approximate - for exact, track level/trend evolution
+        y_forecast <- level + trend * phi_sum + error
+      }
+      
+      # Update level and trend
+      level <- level + phi * trend + alpha * error
+      trend <- phi * trend + beta * error
+      
+      forecast_paths[sim, step] <- y_forecast
+    }
+  }
+  
+  # Calculate prediction intervals
+  lower_prob <- (1 - prob) / 2
+  upper_prob <- 1 - lower_prob
+  
+  return(list(
+    mean = colMeans(forecast_paths),
+    median = apply(forecast_paths, 2, median),
+    lower = apply(forecast_paths, 2, quantile, lower_prob),
+    upper = apply(forecast_paths, 2, quantile, upper_prob),
+    lower_50 = apply(forecast_paths, 2, quantile, 0.25),
+    upper_50 = apply(forecast_paths, 2, quantile, 0.75),
+    all_paths = forecast_paths
+  ))
+}
+
+# Fix alpha and vary beta (trend smoothing parameter)
+alpha_fixed <- 0
+betas <- c(0, 0.1, 0.3, 0.5)
+phi_fixed <- 0.95  # damping parameter
+
+results <- data.frame(time = 1:n, Y = Y)
+forecasts <- list()
+
+for(b in betas) {
+  level_col <- paste0("level_beta_", b)
+  trend_col <- paste0("trend_beta_", b)
+  
+  smoothed <- exp_smooth_trend(Y, alpha_fixed, b, phi_fixed, true_level0, true_trend0)
+  results[[level_col]] <- smoothed$level
+  results[[trend_col]] <- smoothed$trend
+  
+  # Generate forecasts
+  last_level <- smoothed$level[n]
+  last_trend <- smoothed$trend[n]
+  forecasts[[as.character(b)]] <- simulate_forecast_trend(
+    last_level, last_trend, alpha_fixed, b, phi_fixed, h, sd_error, n_sim=1000, prob=0.90
+  )
+}
+
+# Plotting
+par(mfrow = c(2, 2))
+
+# Define colors for different betas
+colors_beta <- list("0" = "gray50", "0.1" = "blue", 
+                    "0.3" = "green", "0.5" = "orange")
+
+plot_betas <- betas
+
+for(b in plot_betas) {
+  # Extend x-axis to include forecast horizon
+  xlim_range <- c(1, n + h)
+  
+  # Calculate y-axis limits
+  forecast_data <- forecasts[[as.character(b)]]
+  ylim_range <- range(c(Y, 
+                        forecast_data$lower, 
+                        forecast_data$upper))
+  
+  # Plot observed series
+  plot(1:n, Y, type = "l", pch = 20, col = "black", cex = 0.8,
+       xlab = "Time", ylab = "Value", 
+       main = bquote("β = " ~ .(b) ~ " (α = " ~ .(alpha_fixed) ~ ", φ = " ~ .(phi_fixed) ~ ")"),
+       xlim = xlim_range,
+       ylim = ylim_range)
+  
+  # Mark events
+  abline(v = 50, lty = 2, col = "darkred", lwd = 1.5)
+  abline(v = n, lty = 2, col = "gray30", lwd = 1)
+  text(n, ylim_range[1], "Forecast", pos = 4, col = "gray30", cex=0.7)
+  
+  # Add level line
+  level_col <- paste0("level_beta_", b)
+  lines(1:n, results[[level_col]], col = colors_beta[[as.character(b)]], lwd = 2)
+  
+  # Add forecast
+  forecast_times <- (n+1):(n+h)
+  
+  # Add 90% prediction interval
+  polygon(c(forecast_times, rev(forecast_times)),
+          c(forecast_data$lower, rev(forecast_data$upper)),
+          col = adjustcolor(colors_beta[[as.character(b)]], alpha.f = 0.15),
+          border = NA)
+  
+  # Add 50% prediction interval
+  polygon(c(forecast_times, rev(forecast_times)),
+          c(forecast_data$lower_50, rev(forecast_data$upper_50)),
+          col = adjustcolor(colors_beta[[as.character(b)]], alpha.f = 0.3),
+          border = NA)
+  
+  # Add median forecast
+  lines(forecast_times, forecast_data$median, 
+        col = colors_beta[[as.character(b)]], lwd = 2.5, lty = 1)
+  
+  # Connect last level to first forecast
+  lines(c(n, n+1), c(results[[level_col]][n], forecast_data$median[1]),
+        col = colors_beta[[as.character(b)]], lwd = 2.5, lty = 1)
+}
+
+
+
+
+#######################
+# Exponential Smoothing with Seasonality - Illustration
+#######################
+# Exponential Smoothing with Seasonality - Illustration
+set.seed(123)
+
+# Parameters
+n <- 120  # More observations to see multiple seasonal cycles
+s <- 12   # Seasonal period (e.g., monthly data with yearly seasonality)
+true_level0 <- 100
+true_trend0 <- 0.2
+alpha_fixed <- 0  # Fix level (no adaptation)
+beta_fixed <- 0   # Fix trend (no adaptation)
+phi_fixed <- 0.95  # damping parameter
+sd_error <- 5
+
+h <- 24  # forecast 2 seasonal cycles ahead
+
+# Initial seasonal components (one full cycle)
+# Create a seasonal pattern (sine wave for illustration)
+true_seasonal_init <- 15 * sin(2 * pi * (1:s) / s)
+# Normalize so they sum to approximately 0
+true_seasonal_init <- true_seasonal_init - mean(true_seasonal_init)
+
+gammatrue <- 0.7  # True seasonal smoothing parameter
+
+# Generate data with seasonality
+errors <- rnorm(n, 0, sd_error)
+errors[50] <- 20  # Introduce a large error
+
+true_level <- numeric(n)
+true_trend <- numeric(n)
+true_seasonal <- numeric(n + s)  # Need extra for initialization
+Y <- numeric(n)
+
+# Initialize seasonal components
+true_seasonal[1:s] <- true_seasonal_init
+
+# Generate the series
+for(t in 1:n) {
+  # Determine which seasonal index to use
+  season_idx <- ((t - 1) %% s) + 1
+  
+  # Generate observation
+  if(t == 1) {
+    Y[t] <- true_level0 + true_trend0 + true_seasonal[season_idx] + errors[t]
+    true_level[t] <- true_level0 + phi_fixed * true_trend0 + alpha_fixed * errors[t]
+    true_trend[t] <- phi_fixed * true_trend0 + beta_fixed * errors[t]
+  } else {
+    Y[t] <- true_level[t-1] + phi_fixed * true_trend[t-1] + true_seasonal[season_idx] + errors[t]
+    true_level[t] <- true_level[t-1] + phi_fixed * true_trend[t-1] + alpha_fixed * errors[t]
+    true_trend[t] <- phi_fixed * true_trend[t-1] + beta_fixed * errors[t]
+  }
+  
+  # Update seasonal component
+  true_seasonal[s + t] <- true_seasonal[season_idx] + gammatrue * errors[t]
+}
+
+# Function to apply exponential smoothing with seasonality
+exp_smooth_seasonal <- function(Y, alpha, beta, gamma, phi, s, initial_level, initial_trend, initial_seasonal) {
+  n <- length(Y)
+  level <- numeric(n + 1)
+  trend <- numeric(n + 1)
+  seasonal <- numeric(n + s)  # Store all seasonal components
+  
+  level[1] <- initial_level
+  trend[1] <- initial_trend
+  seasonal[1:s] <- initial_seasonal
+  
+  for(t in 1:n) {
+    # Current seasonal index
+    season_idx <- ((t - 1) %% s) + 1
+    
+    # One-step ahead prediction
+    y_pred <- level[t] + phi * trend[t] + seasonal[season_idx]
+    error_t <- Y[t] - y_pred
+    
+    # Update level, trend, and seasonal
+    level[t + 1] <- level[t] + phi * trend[t] + alpha * error_t
+    trend[t + 1] <- phi * trend[t] + beta * error_t
+    seasonal[s + t] <- seasonal[season_idx] + gamma * error_t
+  }
+  
+  return(list(
+    level = level[-1], 
+    trend = trend[-1], 
+    seasonal = seasonal[(s+1):(s+n)]
+  ))
+}
+
+# Function to simulate h-step ahead forecasts with seasonality
+simulate_forecast_seasonal <- function(last_level, last_trend, seasonal_components, 
+                                       alpha, beta, gamma, phi, s, h, sd_error, 
+                                       n_sim=1000, prob=0.90) {
+  forecast_paths <- matrix(NA, nrow=n_sim, ncol=h)
+  
+  for(sim in 1:n_sim) {
+    level <- last_level
+    trend <- last_trend
+    seasonal <- seasonal_components  # Vector of last s seasonal values
+    
+    for(step in 1:h) {
+      # Determine which seasonal component to use
+      season_idx <- ((step - 1) %% s) + 1
+      
+      error <- rnorm(1, 0, sd_error)
+      
+      # Forecast
+      y_forecast <- level + phi * trend + seasonal[season_idx] + error
+      
+      # Update components
+      level <- level + phi * trend + alpha * error
+      trend <- phi * trend + beta * error
+      
+      # Update seasonal (shift and update)
+      new_seasonal <- seasonal[season_idx] + gamma * error
+      seasonal <- c(seasonal[-1], new_seasonal)  # Shift the seasonal vector
+      
+      forecast_paths[sim, step] <- y_forecast
+    }
+  }
+  
+  # Calculate prediction intervals
+  lower_prob <- (1 - prob) / 2
+  upper_prob <- 1 - lower_prob
+  
+  return(list(
+    mean = colMeans(forecast_paths),
+    median = apply(forecast_paths, 2, median),
+    lower = apply(forecast_paths, 2, quantile, lower_prob),
+    upper = apply(forecast_paths, 2, quantile, upper_prob),
+    lower_50 = apply(forecast_paths, 2, quantile, 0.25),
+    upper_50 = apply(forecast_paths, 2, quantile, 0.75),
+    all_paths = forecast_paths
+  ))
+}
+
+# Fix alpha = beta = 0, vary gamma (seasonal smoothing parameter)
+gammas <- c(0, 0.1, 0.2, 0.4)
+
+results <- data.frame(time = 1:n, Y = Y)
+forecasts <- list()
+
+for(g in gammas) {
+  level_col <- paste0("level_gamma_", g)
+  seasonal_col <- paste0("seasonal_gamma_", g)
+  
+  smoothed <- exp_smooth_seasonal(Y, alpha_fixed, beta_fixed, g, phi_fixed, s,
+                                  true_level0, true_trend0, true_seasonal_init)
+  results[[level_col]] <- smoothed$level
+  results[[seasonal_col]] <- smoothed$seasonal
+  
+  # Generate forecasts
+  last_level <- smoothed$level[n]
+  last_trend <- smoothed$trend[n]
+  # Get last s seasonal components
+  last_seasonal <- numeric(s)
+  for(i in 1:s) {
+    # Find the most recent occurrence of each seasonal index
+    idx <- n - ((n - i) %% s)
+    if(idx > 0 && idx <= n) {
+      last_seasonal[i] <- smoothed$seasonal[idx]
+    }
+  }
+  
+  forecasts[[as.character(g)]] <- simulate_forecast_seasonal(
+    last_level, last_trend, last_seasonal, 
+    alpha_fixed, beta_fixed, g, phi_fixed, s, h, sd_error, 
+    n_sim=1000, prob=0.90
+  )
+}
+
+# Plotting
+par(mfrow = c(2, 2))
+
+# Define colors for different gammas
+colors_gamma <- list("0" = "gray50", "0.1" = "blue", 
+                     "0.2" = "green", "0.4" = "orange")
+
+plot_gammas <- gammas
+
+for(g in plot_gammas) {
+  # Extend x-axis to include forecast horizon
+  xlim_range <- c(1, n + h)
+  
+  # Calculate y-axis limits
+  forecast_data <- forecasts[[as.character(g)]]
+  ylim_range <- range(c(Y, 
+                        forecast_data$lower, 
+                        forecast_data$upper))
+  
+  # Plot observed series
+  plot(1:n, Y, type = "l", pch = 20, col = "black", cex = 0.8,
+       xlab = "Time", ylab = "Value", 
+       main = bquote("γ = " ~ .(g) ~ " (α = 0, β = 0, s = " ~ .(s) ~ ")"),
+       xlim = xlim_range,
+       ylim = ylim_range)
+  
+  # Mark events
+  abline(v = 50, lty = 2, col = "darkred", lwd = 1.5)
+  abline(v = n, lty = 2, col = "gray30", lwd = 1)
+  
+  # Add level + seasonal
+  level_col <- paste0("level_gamma_", g)
+  seasonal_col <- paste0("seasonal_gamma_", g)
+  fitted <- results[[level_col]] + results[[seasonal_col]]
+  lines(1:n, fitted, col = colors_gamma[[as.character(g)]], lwd = 2)
+  
+  # Add forecast
+  forecast_times <- (n+1):(n+h)
+  
+  # Add 90% prediction interval
+  polygon(c(forecast_times, rev(forecast_times)),
+          c(forecast_data$lower, rev(forecast_data$upper)),
+          col = adjustcolor(colors_gamma[[as.character(g)]], alpha.f = 0.15),
+          border = NA)
+  
+  # Add 50% prediction interval
+  polygon(c(forecast_times, rev(forecast_times)),
+          c(forecast_data$lower_50, rev(forecast_data$upper_50)),
+          col = adjustcolor(colors_gamma[[as.character(g)]], alpha.f = 0.3),
+          border = NA)
+  
+  # Add median forecast
+  lines(forecast_times, forecast_data$median, 
+        col = colors_gamma[[as.character(g)]], lwd = 2.5, lty = 1)
+  
+  # Connect last fitted to first forecast
+  lines(c(n, n+1), c(fitted[n], forecast_data$median[1]),
+        col = colors_gamma[[as.character(g)]], lwd = 2.5, lty = 1)
+}
+
