@@ -488,7 +488,7 @@ y <- numeric (h.step)
 ## initialization of y_31, b_31 and l_31 (see ets table)
 eps <- rnorm(n=1, mean=0 , sd=sigma)
 y[1] <- l.30 + phi*b.30 + eps
-l.vec[1] <- l.30 + phi*b.30 + alpha*eps
+l.vec[1] <- l.30 + phi*b.30 + alpha*eps %>% 
 b.vec[1] <- phi*b.30 + beta*eps
 
 ## the loop for the next steps

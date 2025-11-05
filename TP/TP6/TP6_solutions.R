@@ -64,6 +64,57 @@ par(mfrow = c(1,1))
 # ------------------------------------------------------ Exercise 2
 
 
+
+
+
+# demo optim
+# 1. Define the loss function
+f <- function(par) {
+  x <- par[1]
+  y <- par[2]
+  (x - 2)^2 + (y + 1)^2
+}
+
+# 2. Create grid
+x_seq <- seq(-3, 6, length.out = 100)
+y_seq <- seq(-5, 3, length.out = 100)
+z <- outer(x_seq, y_seq, Vectorize(function(x, y) f(c(x, y))))
+
+# 3. Plot the 3D surface
+persp_plot <- persp(
+  x_seq, y_seq, z,
+  theta = 45, phi = 30, expand = 0.6,
+  col = "lightblue",
+  shade = 0.5,
+  border = NA,
+  xlab = "x", ylab = "y", zlab = "f(x, y)",
+  main = "3D Loss Surface: f(x, y) = (x - 2)^2 + (y + 1)^2"
+)
+
+# 4. Starting and final points
+start <- c(-2, 3)
+res <- optim(start, f)
+
+# 5. Add points and arrow (projected into 3D)
+# Function to project (x, y, z) coordinates onto 2D persp plot
+trans3d_fun <- function(x, y, z, pmat) trans3d(x, y, z, pmat)
+
+points(trans3d_fun(start[1], start[2], f(start), persp_plot),
+       col = "red", pch = 19)
+points(trans3d_fun(res$par[1], res$par[2], f(res$par), persp_plot),
+       col = "blue", pch = 19)
+arrows(
+  x0 = trans3d_fun(start[1], start[2], f(start), persp_plot)$x,
+  y0 = trans3d_fun(start[1], start[2], f(start), persp_plot)$y,
+  x1 = trans3d_fun(res$par[1], res$par[2], f(res$par), persp_plot)$x,
+  y1 = trans3d_fun(res$par[1], res$par[2], f(res$par), persp_plot)$y,
+  col = "darkorange", lwd = 2, length = 0.1
+)
+
+# 6. Print results
+print(res)
+
+
 cond_loglik <- function(par, y) {
   phi1 <- par[1]
   phi2 <- par[2]
@@ -236,10 +287,10 @@ for(i in 2:100){
 sim <- tsibble(idx = seq_len(100), y = y, index = idx)
 plot(sim, type="l")
 
-ar1 <- function(phi, n = 100L) {
+ar1 <- function(phi, n = 100L, sigma=.0001) {
   
   y <- numeric(n)
-  e <- rnorm(n)
+  e <- rnorm(n, sd = sqrt(sigma))
   for (i in 2:n) {
     y[i] <- phi * y[i - 1] + e[i]
   }
@@ -251,8 +302,8 @@ ar1 <- function(phi, n = 100L) {
 
 ar1(0.6)
 ar1(0.6) |> autoplot(y) + labs(title=expression(paste(phi, "=0.6")))
-ar1(0.95) |> autoplot(y) + labs(title=expression(paste(phi, "=0.95")))
-ar1(0.05) |> autoplot(y) + labs(title=expression(paste(phi, "=0.05"))) # when phi_1 = 0, y is a WN
+ar1(0.99) |> autoplot(y) + labs(title=expression(paste(phi, "=0.95")))
+ar1(0.001) |> autoplot(y) + labs(title=expression(paste(phi, "=0.05"))) # when phi_1 = 0, y is a WN
 ar1(-0.65) |> autoplot(y) + labs(title=expression(paste(phi, "=-0.65"))) # when phi_1 < 0, y tends to oscillate
 
 
@@ -270,8 +321,8 @@ ma1 <- function(theta, n = 100L) {
 # 4. Produce a time plot for the series. How does the plot change as you change $\theta_1$?
 
 ma1(0.6) |> autoplot(y) + labs(title=expression(paste(theta, "=0.6")))
-ma1(0.95) |> autoplot(y) + labs(title=expression(paste(theta, "=0.95")))
-ma1(0.05) |> autoplot(y) + labs(title=expression(paste(theta, "=0.05"))) # when \theta_1 = 0, y is a WN
+ma1(0.99) |> autoplot(y) + labs(title=expression(paste(theta, "=0.95")))
+ma1(0.001) |> autoplot(y) + labs(title=expression(paste(theta, "=0.05"))) # when \theta_1 = 0, y is a WN
 ma1(-0.65) |> autoplot(y) + labs(title=expression(paste(theta, "=-0.65")))
 
 # Increasing the magnitude (absolute value) of \theta_1, will increase the impact of the lagged error term 
@@ -305,4 +356,20 @@ ar2(-0.8, 0.3) |> autoplot(y) # we violate the condition (phi_2 - phi_1) < 1 -->
 # Plot the latter two series and compare them.
 
 # See graphs above. The non-stationarity of the AR(2) process has led to increasing oscillations
+
+
+
+
+
+
+
+# ACF and PACF for AR and MA models
+x = arima.sim(n = 10000, list(order = c(1, 0, 0), ar = 0.5))
+plot(acf(x))
+plot(pacf(x))
+x2 = arima.sim(n = 10000, list(order = c(0, 0, 1), ma = 0.5))
+plot(acf(x2))
+plot(pacf(x2))
+
+
 

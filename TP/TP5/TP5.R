@@ -56,6 +56,9 @@ eps0<-0
 #y <- arima.sim(n = n, list(ar = phi, ma = theta), sd = sigma)
 y<-simulate_arma11(Y0=Y0, eps0=eps0, N=N, phi=phi, theta=theta, sigma=sigma)$Y
 
+
+plot(y, type="l")
+
 # Divide into train and test set
 p_train <- 0.7
 n_train <- floor(N * p_train)
@@ -73,7 +76,6 @@ fit <- Arima(y_train, order = c(1,0,1), include.mean = FALSE)
 
 B <- 500  # number of bootstrap paths
 boot_preds <- matrix(NA, nrow = h, ncol = B)
-
 # generate paths
 for(b in 1:B){
   #boot_path <- simulate(fit, nsim = h, bootstrap = TRUE)
@@ -161,7 +163,7 @@ simulate_ar2 <- function(Y1, Y0, N, phi1, phi2, sigma) {
   # Generate innovations from N(0, sigma^2)
   eps <- rnorm(N, mean = 0, sd = sigma)
   
-  # Simulate ARMA(1,1) process
+  # Simulate AR2 process
   for (t in 2:N) {
     if (t == 2) {
       Y[t] <- phi1 * Y1+ phi2 * Y0 + eps[t]
