@@ -1,0 +1,447 @@
+---
+title: "Dynamic Factor Model Analysis with Prediction Intervals"
+author: "Your Name"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+    theme: cosmo
+    highlight: tango
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.width = 10,
+  fig.height = 6
+)
+```
+
+# Introduction
+
+This notebook demonstrates:
+
+1. Simulation of data from a Dynamic Factor Model (DFM) with VAR(1) factors
+2. Estimation using the `sparseDFM` package
+3. Generation of prediction intervals via simulation
+4. Model diagnostics and visualization
+
+# Setup
+
+## Load Required Packages
+```{r load-packages}
+# Install packages if needed
+# install.packages(c("sparseDFM", "doSNOW", "fpp3", "forecast", 
+#                    "patchwork", "dCovTS", "ggplot2", "reshape2", "MASS"))
+
+library(sparseDFM)
+library(doSNOW)
+library(fpp3)
+library(forecast)
+library(patchwork)
+library(dCovTS)
+library(ggplot2)
+library(reshape2)
+library(MASS)
+```
+
+# Part 1: Data Simulation
+
+We simulate data from a Dynamic Factor Model:
+
+$$
+\begin{align}
+Y_t &= \Lambda F_t + \epsilon_t \\
+F_t &= A F_{t-1} + u_t
+\end{align}
+$$
+
+where:
+- $Y_t$ is an $n \times 1$ vector of observed series
+- $F_t$ is an $r \times 1$ vector of latent factors
+- $\Lambda$ is the $n \times r$ loading matrix
+- $\epsilon_t \sim N(0, \Sigma_\epsilon)$ are idiosyncratic errors
+- $u_t \sim N(0, \Sigma_u)$ are factor innovations
+
+We first set the Parameters
+```{r set-parameters}
+set.seed(123)
+
+# Model dimensions
+n_series <- 50      # number of observed time series
+n_time <- 200       # number of time periods
+r <- 3              # number of common factors
+p <- 1              # VAR lag order for factors (VAR(1))
+```
+
+## Generate Factors with VAR(1) Dynamics
+```{r generate-factors}
+# VAR coefficient matrix for VAR(1)
+Phi1 <- matrix(c(0.5, 0.1, 0.0,
+                 0.1, 0.4, 0.1,
+                 0.0, 0.1, 0.3), r, r)
+
+print("VAR(1) coefficient matrix Phi1:")
+print(Phi1)
+
+# Initialize factors
+factors <- matrix(0, n_time, r)
+factors[1,] <- rnorm(r)
+
+# Generate factors with VAR(1) dynamics: F_t = Phi1 * F_{t-1} + u_t
+for(t in 2:n_time) {
+  factors[t,] <- Phi1 %*% factors[t-1,] + rnorm(r, sd = 0.5)
+}
+```
+
+## Visualize Generated Factors
+```{r plot-factors, fig.height=8}
+par(mfrow = c(r, 1), mar = c(3, 4, 2, 1))
+for(i in 1:r) {
+  plot(factors[, i], type = "l", main = paste("Factor", i),
+       ylab = "Value", xlab = "Time", col = "steelblue", lwd = 1.5)
+  grid()
+}
+par(mfrow = c(1, 1))
+```
+
+We now generate Factor Loadings $\Lambda$ and Observed Data
+```{r generate-data}
+# Generate factor loadings (Lambda matrix)
+Lambda <- matrix(runif(n_series * r, -1, 1), n_series, r)
+
+# Generate observed data: y_t = Lambda * F_t + e_t
+idiosyncratic_error <- matrix(rnorm(n_series * n_time, sd = 0.3), 
+                              n_time, n_series)
+data_matrix <- factors %*% t(Lambda) + idiosyncratic_error
+
+# Take first differences for stationarity
+#data_matrix <- diff(data_matrix)
+
+# Name the series
+colnames(data_matrix) <- paste0("Series", 1:n_series)
+
+cat("Data dimensions (after differencing):", dim(data_matrix), "\n")
+cat("Number of observations:", nrow(data_matrix), "\n")
+cat("Number of series:", ncol(data_matrix), "\n")
+```
+
+## Visualize Sample of Observed Series
+```{r plot-sample-series, fig.height=8}
+series_to_show <- c(1, 5, 10, 15)
+par(mfrow = c(length(series_to_show), 1), mar = c(3, 4, 2, 1))
+for(i in series_to_show) {
+  plot(data_matrix[, i], type = "l", main = paste("Series", i),
+       ylab = "Value", xlab = "Time", col = "darkgreen", lwd = 1)
+  grid()
+}
+par(mfrow = c(1, 1))
+```
+
+We can also look at the correlation between $Y_t$:
+```{r}
+cor(data_matrix)
+```
+
+
+
+
+# Part 2: Model Estimation
+
+## Split Data into Training and Test Sets
+```{r split-data}
+Y <- data_matrix
+
+n_train <- 180
+n_test <- nrow(Y) - n_train
+
+Y_train <- Y[1:n_train, ]
+Y_test <- Y[(n_train+1):nrow(Y), ]
+
+cat("Training set size:", n_train, "\n")
+cat("Test set size:", n_test, "\n")
+```
+
+## Determine Optimal Number of Factors
+```{r tune-factors}
+# Use tuneFactors to identify optimal number of factors
+factor_selection <- tuneFactors(Y_train)
+print(factor_selection)
+```
+
+The function correctly identifies 3 factors!
+
+## Estimate Sparse DFM
+```{r estimate-model}
+# Estimate sparse DFM
+fit <- sparseDFM(
+  X = Y_train,
+  r = 3              # number of factors
+)
+
+# View model summary
+summary(fit)
+```
+
+## Model Diagnostics
+
+Produce Factor plots
+```{r plot-estimated-factors, fig.height=8}
+plot(fit, type = "factor")
+```
+
+As before we can also do residual diagnostics
+```{r plot-residuals, fig.height=6}
+plot(fit, type = "residual")
+```
+
+Here of course these boxplots look as expected, as the data are simulated. As before, we can also calculate the distance autocorrelation of residuals,
+checking for remaining dependence structure in residuals (outcommented because of long calculation time)
+```{r distance-autocorr, fig.height=6}
+#resid <- residuals(fit)
+#mADCFplot(resid)  # This may take a while
+```
+
+
+Interesting we can also plot the heatmap of factors. This should illustrate the $\Lambda$ matrix and how Factors are transformed into observations:
+```{r plot-loadings, fig.height=8}
+plot(fit, type = "loading.heatmap")
+```
+
+
+# Part 3: Forecasting with Prediction Intervals
+
+## Define Prediction Interval Function
+
+We generate prediction intervals by simulating from the estimated DFM:
+
+1. Draw $F_{T+h}$ from the VAR(1) process
+2. Draw $Y_{T+h}$ conditional on $F_{T+h}$
+```{r prediction-function}
+generate_prediction_intervals <- function(fit, h, n_sim = 1000, level = 0.95) {
+  
+  # Extract model components
+  # Y_t = Lambda * F_t + epsilon_t
+  # F_t = A * F_{t-1} + u_t
+  
+  A <- fit$params$A                    # VAR coefficients
+  Lambda <- fit$params$Lambda          # n_series x r
+  Sigma_u <- fit$params$Sigma_u        # r x r
+  Sigma_epsilon <- fit$params$Sigma_epsilon  # n_series x n_series (diagonal)
+  
+  n_series <- nrow(Lambda)
+  r <- ncol(Lambda)
+  p <- fit$p  # VAR lag order
+  
+  # Storage for simulations
+  Y_sim <- array(NA, dim = c(h, n_series, n_sim))
+  
+  # Get E[F_{T+1} | F_T]
+  FT1 <- predict(fit)$F_hat
+  
+  # Simulate from the DFM
+  for(sim in 1:n_sim) {
+    
+    # Initialize factor simulations
+    F_sim <- matrix(NA, h, r)
+    
+    # Draw F_{T+1} ~ N(E[F_{T+1}|F_T], Sigma_u)
+    F_sim[1, ] <- FT1 + mvrnorm(1, mu = rep(0, r), Sigma = Sigma_u)
+    
+    # Draw Y_{T+1} | F_{T+1}
+    Y_sim[1, , sim] <- Lambda %*% F_sim[1, ] + 
+      mvrnorm(1, mu = rep(0, n_series), Sigma = diag(Sigma_epsilon))
+    
+    # Simulate forward h-1 more steps
+    for(t in 2:h) {
+      # Simulate F_t from VAR(1): F_t = A * F_{t-1} + u_t
+      F_sim[t, ] <- A %*% F_sim[t-1, ] + 
+        mvrnorm(1, mu = rep(0, r), Sigma = Sigma_u)
+      
+      # Simulate Y_t | F_t
+      Y_sim[t, , sim] <- Lambda %*% F_sim[t, ] + 
+        mvrnorm(1, mu = rep(0, n_series), Sigma = diag(Sigma_epsilon))
+    }
+  }
+  
+  # Calculate prediction intervals
+  alpha <- 1 - level
+  lower <- apply(Y_sim, c(1, 2), quantile, probs = alpha/2, na.rm = TRUE)
+  upper <- apply(Y_sim, c(1, 2), quantile, probs = 1 - alpha/2, na.rm = TRUE)
+  median_forecast <- apply(Y_sim, c(1, 2), median, na.rm = TRUE)
+  
+  return(list(
+    median = median_forecast,
+    lower = lower,
+    upper = upper,
+    simulations = Y_sim
+  ))
+}
+```
+
+
+
+Then we use this function to generate predictions:
+```{r generate-predictions}
+set.seed(456)
+
+# Generate 90% prediction intervals
+pred_intervals <- generate_prediction_intervals(
+  fit = fit,
+  h = n_test,
+  n_sim = 1000,
+  level = 0.90
+)
+
+# Get point forecasts from predict method
+predictions <- predict(
+  object = fit,
+  h = n_test,
+  X_new = NULL
+)
+Y_pred <- predictions$X_hat
+
+cat("Prediction intervals generated successfully!\n")
+cat("Forecast horizon:", n_test, "periods\n")
+cat("Number of simulations:", 1000, "\n")
+```
+
+## Evaluate Coverage
+```{r evaluate-coverage}
+# Check if true values fall within prediction intervals
+in_interval <- (Y_test >= pred_intervals$lower) & (Y_test <= pred_intervals$upper)
+coverage <- mean(in_interval, na.rm = TRUE)
+
+cat(sprintf("Empirical coverage of 90%% prediction intervals: %.1f%%\n", 
+            coverage * 100))
+```
+
+### Coverage by Horizon
+```{r coverage-by-horizon, fig.height=5}
+coverage_by_horizon <- rowMeans(in_interval, na.rm = TRUE)
+
+plot(1:n_test, coverage_by_horizon, type = "l", lwd = 2,
+     ylim = c(0, 1), col = "steelblue",
+     main = "Prediction Interval Coverage by Horizon",
+     xlab = "Forecast Horizon", ylab = "Coverage Rate")
+abline(h = 0.90, col = "red", lty = 2, lwd = 2)
+grid()
+legend("bottomleft", legend = c("Empirical", "Nominal 90%"), 
+       col = c("steelblue", "red"), lty = c(1, 2), lwd = 2)
+```
+We now visualize some of the forecasts with prediction intervals
+```{r forecast-plots, fig.height=12}
+# Plot forecasts for selected series with prediction intervals
+series_to_plot <- c(1, 5, 10)
+
+par(mfrow = c(length(series_to_plot), 1), mar = c(4, 4, 3, 1))
+for(i in series_to_plot) {
+  
+  # Determine y-axis limits
+  y_range <- range(c(Y_train[, i], Y_test[, i], 
+                     pred_intervals$lower[, i], pred_intervals$upper[, i]),
+                   na.rm = TRUE)
+  
+  # Plot training data
+  plot(1:n_train, Y_train[, i], type = "l", 
+       xlim = c(1, n_train + n_test),
+       ylim = y_range,
+       main = paste("Series", i, "- Forecasts with 90% Prediction Intervals"),
+       xlab = "Time", ylab = "Value", col = "gray50", lwd = 1.5)
+  
+  # Add forecast period separator
+  abline(v = n_train, col = "gray30", lty = 3, lwd = 2)
+  
+  # Add prediction interval as shaded region
+  time_forecast <- (n_train+1):(n_train+n_test)
+  polygon(c(time_forecast, rev(time_forecast)),
+          c(pred_intervals$lower[, i], rev(pred_intervals$upper[, i])),
+          col = rgb(1, 0, 0, 0.2), border = NA)
+  
+  # Add actual test values
+  lines(time_forecast, Y_test[, i], col = "black", lwd = 2)
+  
+  # Add median forecast
+  lines(time_forecast, pred_intervals$median[, i], col = "red", lwd = 2, lty = 1)
+  
+  grid()
+  
+  # Add legend
+  legend("topleft", 
+         legend = c("Training Data", "True Values", "Median Forecast", "90% PI"),
+         col = c("gray50", "black", "red", rgb(1, 0, 0, 0.2)),
+         lty = c(1, 1, 1, 1), lwd = c(1.5, 2, 2, 10),
+         cex = 0.8, bg = "white")
+}
+par(mfrow = c(1, 1))
+```
+
+
+# Part 5: Probability Forecasts
+
+With the simulation approach, we can easily predict probabilities:
+```{r predictive-density, fig.height=5}
+# Example: Probability that Series 1 exceeds a threshold at h=1
+threshold <- 0.5
+prob_exceed <- mean(pred_intervals$simulations[1, 1, ] > threshold)
+
+cat(sprintf("P(Series 1 > %.2f at h=1) = %.3f\n", threshold, prob_exceed))
+
+# Visualize predictive density
+hist(pred_intervals$simulations[1, 1, ], breaks = 50, freq = FALSE,
+     main = "Predictive Density for Series 1 at h=1",
+     xlab = "Value", col = "lightblue", border = "white",
+     xlim = range(c(pred_intervals$simulations[1, 1, ], Y_test[1, 1])))
+abline(v = Y_test[1, 1], col = "red", lwd = 3, lty = 2)
+abline(v = threshold, col = "darkgreen", lwd = 2, lty = 3)
+legend("topright", 
+       legend = c("True Value", "Threshold"), 
+       col = c("red", "darkgreen"), lty = c(2, 3), lwd = c(3, 2))
+```
+
+We can of course also look at multiple quantiles at once:
+```{r quantile-fan-chart, fig.height=6}
+# Create a fan chart showing multiple quantiles
+series_idx <- 1
+quantiles <- c(0.05, 0.25, 0.50, 0.75, 0.95)
+
+q_forecasts <- t(apply(pred_intervals$simulations[, series_idx, ], 1, 
+                     quantile, probs = quantiles))
+
+time_all <- 1:(n_train + n_test)
+time_forecast <- (n_train+1):(n_train+n_test)
+
+# Plot
+y_range <- range(c(Y_train[, series_idx], Y_test[, series_idx], q_forecasts),
+                 na.rm = TRUE)
+
+plot(1:n_train, Y_train[, series_idx], type = "l", lwd = 1.5,
+     xlim = range(time_all), ylim = y_range,
+     main = paste("Fan Chart for Series", series_idx),
+     xlab = "Time", ylab = "Value", col = "black")
+
+abline(v = n_train, col = "gray", lty = 3, lwd = 2)
+
+# Add shaded regions for different quantiles
+polygon(c(time_forecast, rev(time_forecast)),
+        c(q_forecasts[, 1], rev(q_forecasts[, 5])),
+        col = rgb(0, 0, 1, 0.1), border = NA)
+polygon(c(time_forecast, rev(time_forecast)),
+        c(q_forecasts[, 2], rev(q_forecasts[, 4])),
+        col = rgb(0, 0, 1, 0.2), border = NA)
+
+# Add median
+lines(time_forecast, q_forecasts[, 3], col = "blue", lwd = 2)
+
+# Add actual values
+lines(time_forecast, Y_test[, series_idx], col = "red", lwd = 2)
+
+legend("topleft", 
+       legend = c("Historical", "Actual", "Median Forecast", "5-95%", "25-75%"),
+       col = c("black", "red", "blue", rgb(0, 0, 1, 0.1), rgb(0, 0, 1, 0.2)),
+       lty = 1, lwd = c(1.5, 2, 2, 10, 10), cex = 0.8)
+grid()
+```
