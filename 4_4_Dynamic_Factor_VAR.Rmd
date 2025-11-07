@@ -29,9 +29,7 @@ This notebook demonstrates:
 3. Generation of prediction intervals via simulation
 4. Model diagnostics and visualization
 
-# Setup
 
-## Load Required Packages
 ```{r load-packages}
 # Install packages if needed
 # install.packages(c("sparseDFM", "doSNOW", "fpp3", "forecast", 
@@ -60,11 +58,21 @@ F_t &= A F_{t-1} + u_t
 $$
 
 where:
-- $Y_t$ is an $n \times 1$ vector of observed series
-- $F_t$ is an $r \times 1$ vector of latent factors
-- $\Lambda$ is the $n \times r$ loading matrix
-- $\epsilon_t \sim N(0, \Sigma_\epsilon)$ are idiosyncratic errors
-- $u_t \sim N(0, \Sigma_u)$ are factor innovations
+\begin{itemize}
+\item $Y_t$ is an $n \times 1$ vector of observed series
+\item $F_t$ is an $r \times 1$ vector of latent factors
+\item $\Lambda$ is the $n \times r$ loading matrix
+\item $\epsilon_t \sim N(0, \Sigma_\epsilon)$ are idiosyncratic errors
+\item $u_t \sim N(0, \Sigma_u)$ are factor innovations
+\end{itemize}
+
+
+
+
+Note that $\Lambda$ transforms the $r$ factors into the $n$ observations at each $t$. Thus this matrix can have interesting interpretations, for instance revealing which series share the same factor. In the sparseDFM package that we are using $\Lambda$ gets estimated more sparsely (i.e. with more zeros), which makes it easier to interpret.
+
+We also note that $\Sigma_\epsilon$ is assumed to be diagonal, i.e. any correlation between the elements of $Y_t$ is strictly coming from the factors.
+
 
 We first set the Parameters
 ```{r set-parameters}
@@ -77,7 +85,7 @@ r <- 3              # number of common factors
 p <- 1              # VAR lag order for factors (VAR(1))
 ```
 
-## Generate Factors with VAR(1) Dynamics
+We then generate Factors with VAR(1) Dynamics...
 ```{r generate-factors}
 # VAR coefficient matrix for VAR(1)
 Phi1 <- matrix(c(0.5, 0.1, 0.0,
@@ -97,7 +105,7 @@ for(t in 2:n_time) {
 }
 ```
 
-## Visualize Generated Factors
+... and visualize them:
 ```{r plot-factors, fig.height=8}
 par(mfrow = c(r, 1), mar = c(3, 4, 2, 1))
 for(i in 1:r) {
@@ -108,7 +116,7 @@ for(i in 1:r) {
 par(mfrow = c(1, 1))
 ```
 
-We now generate Factor Loadings $\Lambda$ and Observed Data
+Given the factors, we now generate the loadings $\Lambda$ and the observed data...
 ```{r generate-data}
 # Generate factor loadings (Lambda matrix)
 Lambda <- matrix(runif(n_series * r, -1, 1), n_series, r)
@@ -129,7 +137,7 @@ cat("Number of observations:", nrow(data_matrix), "\n")
 cat("Number of series:", ncol(data_matrix), "\n")
 ```
 
-## Visualize Sample of Observed Series
+... and visualize:
 ```{r plot-sample-series, fig.height=8}
 series_to_show <- c(1, 5, 10, 15)
 par(mfrow = c(length(series_to_show), 1), mar = c(3, 4, 2, 1))
@@ -141,9 +149,9 @@ for(i in series_to_show) {
 par(mfrow = c(1, 1))
 ```
 
-We can also look at the correlation between $Y_t$:
+We can also look at the correlation between $Y_t$ (or its first few elements):
 ```{r}
-cor(data_matrix)
+cor(data_matrix[1:5,1:5])
 ```
 
 
@@ -151,7 +159,7 @@ cor(data_matrix)
 
 # Part 2: Model Estimation
 
-## Split Data into Training and Test Sets
+We now split into test and training set:
 ```{r split-data}
 Y <- data_matrix
 
@@ -165,7 +173,14 @@ cat("Training set size:", n_train, "\n")
 cat("Test set size:", n_test, "\n")
 ```
 
-## Determine Optimal Number of Factors
+
+Note that for real data we could now use 
+```{r}
+#new_data <- transformData(Y_train, stationary_transform=2)## First difference
+```
+
+to try to find a differencing such that the data becomes stationary. Here we simulated data, so this is not necessary.
+
 ```{r tune-factors}
 # Use tuneFactors to identify optimal number of factors
 factor_selection <- tuneFactors(Y_train)
@@ -174,21 +189,35 @@ print(factor_selection)
 
 The function correctly identifies 3 factors!
 
-## Estimate Sparse DFM
+We now estimate the sparse version of the Dynamical Factor Model:
 ```{r estimate-model}
 # Estimate sparse DFM
 fit <- sparseDFM(
   X = Y_train,
-  r = 3              # number of factors
+  r = 3,              # number of factors
+  alg = "EM-sparse"
 )
 
 # View model summary
 summary(fit)
 ```
 
-## Model Diagnostics
+Note that if we instead used 
+```{r estimate-model 2}
+# Estimate sparse DFM
+fitnonsparse <- sparseDFM(
+  X = Y_train,
+  r = 3,              # number of factors
+  alg = "EM"
+)
 
-Produce Factor plots
+# View model summary
+summary(fitnonsparse)
+```
+
+we would get a version with less zeros in $\Lambda$.
+
+There are now various diagnostic and plotting tools available! First, we produce Factor plots
 ```{r plot-estimated-factors, fig.height=8}
 plot(fit, type = "factor")
 ```
@@ -214,9 +243,7 @@ plot(fit, type = "loading.heatmap")
 
 # Part 3: Forecasting with Prediction Intervals
 
-## Define Prediction Interval Function
-
-We generate prediction intervals by simulating from the estimated DFM:
+The package unfortunately only creates predictions of the (conditional) expectations of factors and the series. However, we generate prediction intervals by simulating from the estimated DFM:
 
 1. Draw $F_{T+h}$ from the VAR(1) process
 2. Draw $Y_{T+h}$ conditional on $F_{T+h}$
@@ -284,7 +311,7 @@ generate_prediction_intervals <- function(fit, h, n_sim = 1000, level = 0.95) {
 
 
 
-Then we use this function to generate predictions:
+Then we use this function to generate predictions,
 ```{r generate-predictions}
 set.seed(456)
 
@@ -309,30 +336,8 @@ cat("Forecast horizon:", n_test, "periods\n")
 cat("Number of simulations:", 1000, "\n")
 ```
 
-## Evaluate Coverage
-```{r evaluate-coverage}
-# Check if true values fall within prediction intervals
-in_interval <- (Y_test >= pred_intervals$lower) & (Y_test <= pred_intervals$upper)
-coverage <- mean(in_interval, na.rm = TRUE)
 
-cat(sprintf("Empirical coverage of 90%% prediction intervals: %.1f%%\n", 
-            coverage * 100))
-```
-
-### Coverage by Horizon
-```{r coverage-by-horizon, fig.height=5}
-coverage_by_horizon <- rowMeans(in_interval, na.rm = TRUE)
-
-plot(1:n_test, coverage_by_horizon, type = "l", lwd = 2,
-     ylim = c(0, 1), col = "steelblue",
-     main = "Prediction Interval Coverage by Horizon",
-     xlab = "Forecast Horizon", ylab = "Coverage Rate")
-abline(h = 0.90, col = "red", lty = 2, lwd = 2)
-grid()
-legend("bottomleft", legend = c("Empirical", "Nominal 90%"), 
-       col = c("steelblue", "red"), lty = c(1, 2), lwd = 2)
-```
-We now visualize some of the forecasts with prediction intervals
+and visualize some of the forecasts with prediction intervals:
 ```{r forecast-plots, fig.height=12}
 # Plot forecasts for selected series with prediction intervals
 series_to_plot <- c(1, 5, 10)
@@ -380,28 +385,6 @@ par(mfrow = c(1, 1))
 ```
 
 
-# Part 5: Probability Forecasts
-
-With the simulation approach, we can easily predict probabilities:
-```{r predictive-density, fig.height=5}
-# Example: Probability that Series 1 exceeds a threshold at h=1
-threshold <- 0.5
-prob_exceed <- mean(pred_intervals$simulations[1, 1, ] > threshold)
-
-cat(sprintf("P(Series 1 > %.2f at h=1) = %.3f\n", threshold, prob_exceed))
-
-# Visualize predictive density
-hist(pred_intervals$simulations[1, 1, ], breaks = 50, freq = FALSE,
-     main = "Predictive Density for Series 1 at h=1",
-     xlab = "Value", col = "lightblue", border = "white",
-     xlim = range(c(pred_intervals$simulations[1, 1, ], Y_test[1, 1])))
-abline(v = Y_test[1, 1], col = "red", lwd = 3, lty = 2)
-abline(v = threshold, col = "darkgreen", lwd = 2, lty = 3)
-legend("topright", 
-       legend = c("True Value", "Threshold"), 
-       col = c("red", "darkgreen"), lty = c(2, 3), lwd = c(3, 2))
-```
-
 We can of course also look at multiple quantiles at once:
 ```{r quantile-fan-chart, fig.height=6}
 # Create a fan chart showing multiple quantiles
@@ -444,4 +427,32 @@ legend("topleft",
        col = c("black", "red", "blue", rgb(0, 0, 1, 0.1), rgb(0, 0, 1, 0.2)),
        lty = 1, lwd = c(1.5, 2, 2, 10, 10), cex = 0.8)
 grid()
+```
+
+
+
+
+
+
+
+# Part 5: Probability Forecasts
+
+With the simulation approach, we can easily predict probabilities:
+```{r predictive-density, fig.height=5}
+# Example: Probability that Series 1 exceeds a threshold at h=1
+threshold <- 0.5
+prob_exceed <- mean(pred_intervals$simulations[1, 1, ] > threshold)
+
+cat(sprintf("P(Series 1 > %.2f at h=1) = %.3f\n", threshold, prob_exceed))
+
+# Visualize predictive density
+hist(pred_intervals$simulations[1, 1, ], breaks = 50, freq = FALSE,
+     main = "Predictive Density for Series 1 at h=1",
+     xlab = "Value", col = "lightblue", border = "white",
+     xlim = range(c(pred_intervals$simulations[1, 1, ], Y_test[1, 1])))
+abline(v = Y_test[1, 1], col = "red", lwd = 3, lty = 2)
+abline(v = threshold, col = "darkgreen", lwd = 2, lty = 3)
+legend("topright", 
+       legend = c("True Value", "Threshold"), 
+       col = c("red", "darkgreen"), lty = c(2, 3), lwd = c(3, 2))
 ```
