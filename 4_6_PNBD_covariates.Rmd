@@ -1,0 +1,130 @@
+---
+title: "PNBD_covariates"
+output: html_document
+date: "2025-11-15"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(data.table)
+library(CLVTools)
+```
+
+We first load the gift data set
+
+```{r cars}
+load("Gift-v1.Rdata")
+```
+
+As before we prepare the object with 3 years of estimation:
+
+
+```{r load-CreateObj}
+clv.gift <- clvdata(mydata,  
+                       date.format="ymd", 
+                       time.unit = "week",
+                       estimation.split = 156,
+                       name.id = "Id",
+                       name.date = "Date",
+                       name.price = "Price")
+
+plot(clv.gift)
+```
+
+Note the heavy yearly seasonality in this data set! 
+
+
+
+
+```{r}
+
+# Remove all other covariates
+covariates.dynamic<-covariates.dynamic[,c("Id", "Cov.Date")]
+
+# (1) Holiday dummy for December and surrounding months
+# Define which months should be considered as "holiday period"
+covariates.dynamic[, holiday := ifelse(month(Cov.Date) %in% c(11, 12, 1), 1, 0)]
+
+# Alternative: only December
+# dt[, holiday := ifelse(month(Cov.Date) == 12, 1, 0)]
+
+# (2) Fourier terms for dynamic regression
+# Set K (number of Fourier pairs)
+K <- 3  # You can adjust this
+
+# Create time index t (starts at 0)
+covariates.dynamic[, t := 0:(.N-1), by = Id]
+
+# Generate Fourier terms for each k from 1 to K
+for(k in 1:K) {
+  # Sine term
+  covariates.dynamic[, paste0("sin_", k) := sin(2 * pi * k * t / 52)]
+  
+  # Cosine term
+  covariates.dynamic[, paste0("cos_", k) := cos(2 * pi * k * t / 52)]
+}
+
+# Check the result
+head(covariates.dynamic, 20)
+```
+
+
+We can now set up the dynamic covariates (may take a moment):
+
+```{r}
+
+nam<-colnames(covariates.dynamic)[3:ncol(covariates.dynamic)]
+
+
+
+clv.dynamic <- SetDynamicCovariates(
+  clv.data = clv.gift,
+  data.cov.life = covariates.dynamic,
+  data.cov.trans = covariates.dynamic,
+  names.cov.life =nam,
+  names.cov.trans = nam,
+  name.id = "Id",
+  name.date = "Cov.Date"
+)
+
+
+```
+Finally we can use this to estimate several possible models:
+
+```{r}
+
+# est.pnbd.static.full <- latentAttrition(
+#   formula =~.|. ,
+#   family = pnbd,
+#   data = clv.dynamic,
+#   optimx.args = list(method = "Nelder-Mead"))
+
+est.pnbd.static.K0 <- latentAttrition(
+  formula =~ holiday|holiday ,
+  family = pnbd,
+  data = clv.dynamic,
+  optimx.args = list(method = "Nelder-Mead"))
+
+est.pnbd.static.K1 <- latentAttrition(
+  formula =~ holiday|holiday+sin_1+cos_1 ,
+  family = pnbd,
+  data = clv.dynamic,
+  optimx.args = list(method = "Nelder-Mead"))
+
+est.pnbd.static.K2 <- latentAttrition(
+  formula =~ holiday|holiday+sin_1+cos_1 + sin_2 + cos_2 ,
+  family = pnbd,
+  data = clv.dynamic,
+  optimx.args = list(method = "Nelder-Mead"))
+
+est.pnbd.static.K3 <- latentAttrition(
+  formula =~ Gender|holiday|holiday+sin_1+cos_1 + sin_2 + cos_2 + sin_3 + cos_3 ,
+  family = pnbd,
+  data = clv.dynamic,
+  optimx.args = list(method = "Nelder-Mead"))
+
+```
+
+
+
