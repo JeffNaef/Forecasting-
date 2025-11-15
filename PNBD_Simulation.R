@@ -9,7 +9,10 @@ library(lubridate)
 simulate_pnbd <- function(n_customers, 
                           beta, s,      # Gamma parameters for M0 (transaction rate)
                           alpha, r,     # Gamma parameters for Lambda0 (dropout rate) 
+                          gamma, q,     # Gamma parameters for N (Spending rate) 
+                          p,     # Gamma parameters for Z (Spending)
                           start_date = as.Date("2005-01-01"),
+                          seasonality = F ,
                           observation_period = 208) {
   
   cat("Simulating", n_customers, "customers from Pareto/NBD model...\n")
@@ -26,6 +29,8 @@ simulate_pnbd <- function(n_customers,
   Lambda0 <- rgamma(n_customers, shape = r, rate = alpha)
   cat("Step 2: Generated transaction rates Lambda0 from Gam(", alpha, ",", r, ")\n")
   
+  # Step 3: Draw Nu from gamma distribution Gam(gamma, q)
+  Nu <- rgamma(n_customers, shape = q, rate = gamma)
   # Step 3: For each customer, draw their unobserved lifetime Omega ~ Exp(Lambda0)
   Omega <- rexp(n_customers, rate = M0)
   cat("Step 3: Generated customer lifetimes Omega ~ Exp(M0)\n")
@@ -69,11 +74,13 @@ simulate_pnbd <- function(n_customers,
     
     # Convert transaction times to dates and create transaction records
     if (length(transaction_times) > 0) {
+      
+      
       for (j in 1:length(transaction_times)) {
         transaction_date <- start_date + days( round(transaction_times[j]*7))
         
         # Generate a realistic transaction amount (need to change this!!!)
-        transaction_amount <- round(rlnorm(1, meanlog = 3, sdlog = 0.5), 2)
+        transaction_amount <- round(rgamma(1, shape = p, rate = Nu[i]), 2)
         
         customer_transactions <- rbind(customer_transactions, 
                                        data.frame(
@@ -107,11 +114,14 @@ set.seed(123)  # For reproducible results
 
 # Simulate 600 customers (matching the example data)
 simulated_data <- simulate_pnbd(
-  n_customers = 8000,
+  n_customers = 2000,
   beta = 20,      # Rate parameter for transaction rate (higher = lower transaction rates)
   s = 2,         # Shape parameter for transaction rate  
   alpha = 8,     # Rate parameter for dropout rate (higher = higher dropout)
   r = 3,         # Shape parameter for dropout rate
+  q=10,
+  gamma=2,
+  p=200,
   start_date = as.Date("2005-01-01"),
   observation_period = 208  # One year observation period
 )
@@ -173,6 +183,8 @@ cat("- Price: Numeric vector with transaction amounts\n")
 
 library(CLVTools)
 
+##Set up a CLVTools object, whereby we split after 2 years (104 weeks)
+
 clv.sim <- clvdata(simulated_data,  
                        date.format="ymd", 
                        time.unit = "week",
@@ -182,9 +194,20 @@ clv.sim <- clvdata(simulated_data,
                        name.price = "Price")
 
 
-est.pnbd <- latentAttrition(formula = , family = pnbd, data=clv.sim)
+#Estimate the PNBD model
+est.pnbd <- latentAttrition(family = pnbd, data=clv.sim)
 est.pnbd
 
+summary(est.pnbd)
+plot(est.pnbd)
 
+# Now we estimate the spending Part
+est.gg <- spending(family = gg, data = clv.sim)
+
+summary(est.gg)
+plot(est.gg)
+
+## Finally we can predict all our customers and their expected spending in [h,T+h]:
+dt.pred<-predict(est.pnbd,predict.spending = est.gg,prediction.end=52)
 
 

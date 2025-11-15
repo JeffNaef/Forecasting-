@@ -1,10 +1,11 @@
 ---
 title: "Walkthrough for the CLVTools Package"
 output:
-  pdf_document:
-    latex_engine: xelatex
+  html_document:
     toc: true
+    toc_float: true
     number_sections: yes
+    theme: default
 vignette: >
   %\VignetteIndexEntry{The CLVTools Package} 
   %\VignetteEncoding{UTF-8} 
