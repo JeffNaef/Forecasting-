@@ -24,7 +24,7 @@ As before we prepare the object with 3 years of estimation:
 clv.gift <- clvdata(mydata,  
                        date.format="ymd", 
                        time.unit = "week",
-                       estimation.split = 104, #156,
+                       estimation.split = 156, #156,
                        name.id = "Id",
                        name.date = "Date",
                        name.price = "Price")
@@ -51,7 +51,7 @@ covariates.dynamic[, holiday := ifelse(month(Cov.Date) %in% c(11, 12, 1), 1, 0)]
 
 # (2) Fourier terms for dynamic regression
 # Set K (number of Fourier pairs)
-K <- 3  # You can adjust this
+K <- 5  # You can adjust this
 
 # Create time index t (starts at 0)
 covariates.dynamic[, t := 0:(.N-1), by = Id]
@@ -124,12 +124,91 @@ est.pnbd.K3 <- latentAttrition(
   data = clv.dynamic,
   optimx.args = list(method = "Nelder-Mead"))
 
+est.pnbd.K4 <- latentAttrition(
+  formula =~ holiday|holiday+sin_1+cos_1 + sin_2 + cos_2 + sin_3 + cos_3 + sin_4 + cos_4 ,
+  family = pnbd,
+  data = clv.dynamic,
+  optimx.args = list(method = "Nelder-Mead"))
+
+est.pnbd.K5 <- latentAttrition(
+  formula =~ holiday|holiday+sin_1+cos_1 + sin_2 + cos_2 + sin_3 + cos_3 + sin_4 + cos_4 + sin_5 + cos_5 ,
+  family = pnbd,
+  data = clv.dynamic,
+  optimx.args = list(method = "Nelder-Mead"))
+
+
 ```
 
-Now we choosethe best model using AIC:
+
+Now we choose the best model using AIC:
+
+```{r}
+# Create a named list to store AIC values
+
+aic_values <- setNames(
+  numeric(K+1),
+  paste0("K", 0:5)
+)
+
+# Get list of model objects
+models <- list(
+  K0 = est.pnbd.K0,
+  K1 = est.pnbd.K1,
+  K2 = est.pnbd.K2,
+  K3 = est.pnbd.K3,
+  K4 = est.pnbd.K4,
+  K5 = est.pnbd.K5
+)
+
+# Loop through models and extract AIC
+for (i in seq_along(models)) {
+  aic_values[i] <- summary(models[[i]])$AIC
+}
+
+# Create results data frame
+aic_results <- data.frame(
+  Model = names(aic_values),
+  AIC = aic_values,
+  Delta_AIC = aic_values - min(aic_values),
+  row.names = NULL
+)
+
+# Sort by AIC
+aic_results <- aic_results[order(aic_results$AIC), ]
+
+# Display results
+print(aic_results, row.names = FALSE)
+
+# Highlight the best model
+cat("\n")
+cat("Best model:", aic_results$Model[1], 
+    "with AIC =", round(aic_results$AIC[1], 2), "\n")
+
+```
+
+We now plot and predict with the best model:
 
 ```{r}
 
-```
 
+rmse <- function(x, y){sqrt(mean((x - y)^2))}
+
+plot(models[aic_results$Model[1]][[1]])
+
+##Predict the GG model separately
+est.gg <- spending(family = gg, data = clv.gift)
+
+h<-104
+
+# select a given horizon to analyse forecasting for different segment for H = 52,104,156, 208
+dt.pred.cov <- predict(models[aic_results$Model[1]][[1]], predict.spending = est.gg,prediction.end=h)
+
+
+#RMSE using the best model
+rmse(dt.pred.cov$actual.period.spending, dt.pred.cov$predicted.period.spending)
+
+
+
+
+```
 
