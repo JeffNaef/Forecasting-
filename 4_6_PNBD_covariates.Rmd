@@ -24,7 +24,7 @@ As before we prepare the object with 3 years of estimation:
 clv.gift <- clvdata(mydata,  
                        date.format="ymd", 
                        time.unit = "week",
-                       estimation.split = 156,
+                       estimation.split = 104, #156,
                        name.id = "Id",
                        name.date = "Date",
                        name.price = "Price")
@@ -100,31 +100,36 @@ Finally we can use this to estimate several possible models:
 #   data = clv.dynamic,
 #   optimx.args = list(method = "Nelder-Mead"))
 
-est.pnbd.static.K0 <- latentAttrition(
+est.pnbd.K0 <- latentAttrition(
   formula =~ holiday|holiday ,
   family = pnbd,
   data = clv.dynamic,
-  optimx.args = list(method = "Nelder-Mead"))
+  optimx.args = list(method = "BFGS"))
 
-est.pnbd.static.K1 <- latentAttrition(
+est.pnbd.K1 <- latentAttrition(
   formula =~ holiday|holiday+sin_1+cos_1 ,
   family = pnbd,
   data = clv.dynamic,
-  optimx.args = list(method = "Nelder-Mead"))
+  optimx.args = list(method = "BFGS"))
 
-est.pnbd.static.K2 <- latentAttrition(
+est.pnbd.K2 <- latentAttrition(
   formula =~ holiday|holiday+sin_1+cos_1 + sin_2 + cos_2 ,
   family = pnbd,
   data = clv.dynamic,
-  optimx.args = list(method = "Nelder-Mead"))
+  optimx.args = list(method = "BFGS"))
 
-est.pnbd.static.K3 <- latentAttrition(
-  formula =~ Gender|holiday|holiday+sin_1+cos_1 + sin_2 + cos_2 + sin_3 + cos_3 ,
+est.pnbd.K3 <- latentAttrition(
+  formula =~ holiday|holiday+sin_1+cos_1 + sin_2 + cos_2 + sin_3 + cos_3 ,
   family = pnbd,
   data = clv.dynamic,
   optimx.args = list(method = "Nelder-Mead"))
 
 ```
 
+Now we choosethe best model using AIC:
+
+```{r}
+
+```
 
 
