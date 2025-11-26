@@ -7,7 +7,86 @@ library(fpp3)
 # ----------- ex 1
 
 
-simulate_arima <- function(n, p = 0, d = 0, q = 0, phi = NULL, theta = NULL, sigma2 = 1) {
+
+
+
+simulate_arima <- function(Y0, eps0, N, phi, theta, sigma) {
+  #' Simulate T observations from an ARMA(1,1) process
+  #' 
+  #' The ARMA(1,1,1) model is:
+  #' X_t = phi * X_{t-1} + eps_t + theta * eps_{t-1}
+  #' where X_t=(1-B)Y_t.
+  #' 
+  #' where eps_t ~ N(0, sigma^2)
+  #' 
+  #'  Y0 Starting value for Y at time 0
+  #'  eps0 Starting value for innovation at time 0
+  #'  T Number of observations to simulate
+  #'  phi AR(1) coefficient
+  #'  theta MA(1) coefficient
+  #'  sigma Standard deviation of the innovation process
+  #' 
+  #' Return: A list containing:
+  #'   Y: vector of T simulated values
+  #'   eps: vector of T innovation values
+  
+  # Initialize vectors
+  Y <- numeric(N)
+  eps <- numeric(N)
+  
+  # Generate innovations from N(0, sigma^2)
+  eps <- rnorm(N, mean = 0, sd = sigma)
+  
+  # Simulate ARMA(1,1) process
+  for (t in 1:N) {
+    if (t == 1) {
+      Y[t] <- phi * Y0 + eps[t] + theta * eps0
+    } else {
+      Y[t] <- phi * Y[t-1] + eps[t] + theta * eps[t-1]
+    }
+  }
+  
+  # Obtain ARIMA(1,1,1)
+  X<-cumsum(Y)
+  
+  return(list(X = X, eps = eps))
+}
+
+
+# check 
+set.seed(123)
+n <- 5000                
+phi <- 0.6
+theta <- -0.5
+sigma2 <- 2
+lags <- 10    
+
+# --- Simulate with custom function ---
+
+X_custom <- simulate_arima(Y0=0, eps0=0, N=n, phi=phi, theta=theta, sigma=sqrt(sigma2))$X
+
+X_builtin <- arima.sim(model = list(order = c(1, 1, 1),
+                                    ar = phi,
+                                    ma = theta),
+                       n = n,
+                       sd = sqrt(sigma2))
+
+plot(X_custom, type="l")
+plot(X_builtin)
+
+# Empirical autocovariance
+emp_cov_custom <- acf(X_custom, plot = FALSE, lag.max = lags)$acf
+emp_cov_builtin <- acf(X_builtin, plot = FALSE, lag.max = lags)$acf
+
+# Theoretical ACF
+acf_theo <- ARMAacf(ar = phi, ma = theta, lag.max = lags)
+plot(x = 0:lags, y = acf_theo, type="l")
+lines(x = 0:lags, y = emp_cov_custom, col = "red", lty = 2)
+lines(x = 0:lags, y = emp_cov_builtin, col = "red", lty = 2)
+
+
+
+simulate_arima2 <- function(n, p = 0, d = 0, q = 0, phi = NULL, theta = NULL, sigma2 = 1) {
   # -------------------------------------------
   # INPUTS
   # n       : length of simulated series
@@ -21,7 +100,7 @@ simulate_arima <- function(n, p = 0, d = 0, q = 0, phi = NULL, theta = NULL, sig
   if (p > 0 && length(phi) != p) stop("Length of phi must equal p")
   if (q > 0 && length(theta) != q) stop("Length of theta must equal q")
   
-
+  
   
   # -------------------------------------------
   # BURN-IN to reduce startup effect
@@ -70,84 +149,24 @@ simulate_arima <- function(n, p = 0, d = 0, q = 0, phi = NULL, theta = NULL, sig
 }
 
 
-
-simulate_arima <- function(Y0, eps0, N, phi, theta, sigma) {
-  #' Simulate T observations from an ARMA(1,1) process
-  #' 
-  #' The ARMA(1,1,1) model is:
-  #' X_t = phi * X_{t-1} + eps_t + theta * eps_{t-1}
-  #' where X_t=(1-B)Y_t.
-  #' 
-  #' where eps_t ~ N(0, sigma^2)
-  #' 
-  #'  Y0 Starting value for Y at time 0
-  #'  eps0 Starting value for innovation at time 0
-  #'  T Number of observations to simulate
-  #'  phi AR(1) coefficient
-  #'  theta MA(1) coefficient
-  #'  sigma Standard deviation of the innovation process
-  #' 
-  #' Return: A list containing:
-  #'   Y: vector of T simulated values
-  #'   eps: vector of T innovation values
-  
-  # Initialize vectors
-  Y <- numeric(N)
-  eps <- numeric(N)
-  
-  # Generate innovations from N(0, sigma^2)
-  eps <- rnorm(N, mean = 0, sd = sigma)
-  
-  # Simulate ARMA(1,1) process
-  for (t in 1:N) {
-    if (t == 1) {
-      Y[t] <- phi * Y0 + eps[t] + theta * eps0
-    } else {
-      Y[t] <- phi * Y[t-1] + eps[t] + theta * eps[t-1]
-    }
-  }
-  
-  # Obtain ARIMA(1,1,1)
-  X<-cumsum(Y)
-  
-  return(list(X = X, eps = eps))
-}
-
-
-
-## Need to adapt the solution###########
-
-# check 
+# simulate ARMA 1 1
 set.seed(123)
-n <- 5000                
+n <- 5000
 phi <- 0.6
 theta <- -0.5
 sigma2 <- 2
-lags <- 10    
+lags <- 10
+X_custom2 <- simulate_arima2(n = n, p = 1, d = 0, q = 1,
+                             phi = phi, theta = theta, sigma2 = sigma2)
 
-# --- Simulate with custom function ---
-X_custom <- simulate_arima(n = n, p = 1, d = 0, q = 1,
-                           phi = phi, theta = theta, sigma2 = sigma2)
-
-X_builtin <- arima.sim(model = list(order = c(1, 0, 1),
-                                    ar = phi,
-                                    ma = theta),
-                       n = n,
-                       sd = sqrt(sigma2))
-
-plot(X_custom)
-plot(X_builtin)
+plot(X_custom2, type="l")
 
 # Empirical autocovariance
-emp_cov_custom <- acf(X_custom, plot = FALSE, lag.max = lags)$acf
-emp_cov_builtin <- acf(X_builtin, plot = FALSE, lag.max = lags)$acf
-
-# Theoretical ACF
 acf_theo <- ARMAacf(ar = phi, ma = theta, lag.max = lags)
-
 plot(x = 0:lags, y = acf_theo, type="l")
-lines(x = 0:lags, y = emp_cov_custom, col = "red", lty = 2)
-lines(x = 0:lags, y = emp_cov_builtin, col = "red", lty = 2)
+emp_cov_custom <- acf(X_custom2, plot = FALSE, lag.max = lags)$acf
+lines(x = 0:lags, y = emp_cov_custom, col = "red", lty = 2, lwd=2)
+
 
 
 # ------------------------ ex2
@@ -160,7 +179,7 @@ lines(x = 0:lags, y = emp_cov_builtin, col = "red", lty = 2)
 
 # look at the data
 aus_arrivals
-
+View(aus_arrivals)
 # filter Japan
 aus_arrivals |>
   filter(Origin == "Japan") |>
@@ -266,6 +285,7 @@ resids <- arima_fit |>
 # For both models, there is still autocorrelation (e.g., at lag 6) and probably the residual variance is not totally stable.
 
 ## We can also check the distance autocorrelation:
+library(dCovTS)
 arima_fit |>
   select(auto) |>
   residuals() |>

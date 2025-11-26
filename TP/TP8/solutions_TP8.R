@@ -5,7 +5,7 @@ rm(list=ls())
 
 # pkg
 
-
+library(fpp2)
 library(fpp3)
 library(xlsx)
 library(ggplot2)
@@ -20,9 +20,10 @@ library(dplyr)
 # a. Plot the series and discuss the main features of the data.
 
 data(books)
+?books
 str(books)
 ?books
-
+View(books)
 # Daily sales of paperback and hardcover books at the same store.
 
 plot(books)
@@ -60,9 +61,9 @@ paperback <- books[,1]
 
 help("ses")
 
-par(mfrow=c(1,2))
+par(mfrow=c(2,6))
 
-for(i in seq(0.01, 0.99, 0.1)){
+for(i in seq(0,1,by=.1)){
   
   
   model.ses = ses(paperback, alpha = i, initial = "simple", h = 1)
@@ -139,8 +140,8 @@ for(i in seq(0.2,0.8,0.2)){
 par(mfrow=c(1,1))
 
 model.holt = holt(paperback, initial = "optimal", h=40)
-summary(model.holt)
-
+res = summary(model.holt)
+res$model$par
 plot(model.holt)
 lines(fitted(model.holt), lwd=2, col="red")
 
@@ -149,7 +150,7 @@ lines(fitted(model.holt), lwd=2, col="red")
 # 2. A holt’s model with damped trend (see options in ?holt). 
 # Summarize it, plot the series and add the past forecasts.
 
-model.holt = holt(paperback, initial = "optimal", h=4, damped=TRUE) #phi, beta, alpha (if null are estimated)
+model.holt = holt(paperback, initial = "optimal", h=50, damped=TRUE) #phi, beta, alpha (if null are estimated)
 summary(model.holt)
 plot(model.holt)
 lines(fitted(model.holt), lwd=2, col="red")
@@ -163,6 +164,7 @@ lines(fitted(model.holt), lwd=2, col="red")
 # Use A (the only models seen in class until now).
 
 model.ets = ets(y=paperback, model="AAN", damped=TRUE)
+
 summary(model.ets)
 plot(model.ets) # decomposition
 
@@ -205,6 +207,7 @@ ggplot(april, aes(seq(dim(april)[1]), Temperature_Comedor_Sensor)) +
 
 temp.avg = matrix(april$Temperature_Comedor_Sensor, nc=4, byrow=TRUE)
 temp.avg = apply(temp.avg, 1, mean)
+
 temp.ts = ts(temp.avg, frequency=24, start=c(18,1)) #data starts the 18th of April and end the 30th
 plot.ts(temp.ts)
 
@@ -280,14 +283,34 @@ par(mfrow=c(1,2))
 holt_lux <- forecast::holt(lux_export$Exports, 
                            #PI = F, h=1
 )
-summary(holt_lux)
+summary(holt_lux) # 472.8436
 
-plot(holt_lux)
-lines(fitted(holt_lux), lwd=2, col="red")
+# # Smoothing parameters:
+# #   alpha = 0.9999 
+# # beta  = 0.0689 
+# # 
+# # Initial states:
+# #   l = 88.128 
+# # b = 0.441 
+# # 
+# # sigma:  7.3562
+# 
+# 
+# Smoothing parameters:
+#   alpha = 0.9998998 
+# beta  = 0.06888922 
+# 
+# Initial states:
+#   l[0]     b[0]
+# 88.12922 0.441611
+# 
+# sigma^2:  54.1132
+# plot(holt_lux)
+# lines(fitted(holt_lux), lwd=2, col="red")
 
 # Holt model with damped trend
 holt_lux_damped <- forecast::holt(lux_export$Exports, damped = T)
-summary(holt_lux_damped)
+summary(holt_lux_damped) # 475.8115
 
 plot(holt_lux_damped)
 lines(fitted(holt_lux_damped), lwd=2, col="red")
@@ -312,6 +335,7 @@ holt_fit_AMN <- lux_export |>
     `Holt's method` = ETS(Exports ~ error("A") + trend("M") + season("N"))
   ) 
 
+?ETS
 # have a look at the parameters
 report(holt_fit_AMN)
 
@@ -392,6 +416,7 @@ holt_5h <- forecast::holt(lux_export$Exports,
 summary(holt_5h)
 
 plot(holt_5h)
+
 lines(fitted(holt_5h), lwd=2, col="red")
 
 
@@ -488,7 +513,7 @@ y <- numeric (h.step)
 ## initialization of y_31, b_31 and l_31 (see ets table)
 eps <- rnorm(n=1, mean=0 , sd=sigma)
 y[1] <- l.30 + phi*b.30 + eps
-l.vec[1] <- l.30 + phi*b.30 + alpha*eps %>% 
+l.vec[1] <- l.30 + phi*b.30 + alpha*eps 
 b.vec[1] <- phi*b.30 + beta*eps
 
 ## the loop for the next steps
@@ -527,7 +552,7 @@ for(h in 2:10) {
   b.mat[h,] <- phi*b.mat[h-1,] + beta*eps
 }
 
-k <- 10 #paths to show in the plot (bounded by R)
+k <- 1000 #paths to show in the plot (bounded by R)
 
 plot(paperback, xlim=c(0, 40), ylim=c(100, 300))
 for(j in c(1:k)) { 
