@@ -7,8 +7,8 @@ library(lubridate)
 
 # Function to simulate from Pareto/NBD model
 simulate_pnbd <- function(n_customers, 
-                          beta, s,      # Gamma parameters for M0 (transaction rate)
-                          alpha, r,     # Gamma parameters for Lambda0 (dropout rate) 
+                          beta, s,      # Gamma parameters for M0 (dropout rate)
+                          alpha, r,     # Gamma parameters for Lambda0 (transaction rate) 
                           gamma, q,     # Gamma parameters for N (Spending rate) 
                           p,     # Gamma parameters for Z (Spending)
                           start_date = as.Date("2005-01-01"),
@@ -193,6 +193,7 @@ clv.sim <- clvdata(simulated_data,
                        name.date = "Date",
                        name.price = "Price")
 
+plot(clv.sim)
 
 #Estimate the PNBD model
 est.pnbd <- latentAttrition(family = pnbd, data=clv.sim)
