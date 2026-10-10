@@ -29,7 +29,7 @@ The ARCH(1) is usually written as $$
     $$ where $$ 
         \epsilon_t=\sigma_t \varepsilon_t, \  \sigma_t^2=\varphi_0 + \varphi_1 \epsilon_t^2, \ \varepsilon_t \sim N(0,1),
       $$ with $\varphi_0 > 0$ and $\varphi_1 \geq 0$ for stationarity. This allows for a time varying conditional variance of $$
-        Var(Y_t \mid \mathbf{Y}_{t-1})=v(\mathbf{Y}_{t-1}, \boldsymbol{\phi})^2=\varphi_0 + \varphi_1 (Y_{t-1} - \phi_0)^2,
+        Var(Y_t \mid \mathbf{Y}_{t-1})=v(\mathbf{Y}_{t-1}, \boldsymbol{\phi})^2=\varphi_0 + \varphi_1 (Y_{t-1} - \mu)^2,
         $$ contrary to the AR(p) model.
 
 ## Simulating an ARCH(1) Process
@@ -141,9 +141,9 @@ p4 <- ggplot(adcf_df, aes(x = lag, y = adcf)) +
 
 The ARCH process in the first plot (upper left) shows clear signs of the volatility clustering that is often observed in finance data -- periods of high and low volatility cluster together, because the value of the variance at time $t$ influences the one at $t+1$. Plotting the ACF (upper right) we actually do not observe a significant autocorrelation (the ones that we do see are by accident), since
 \begin{align*}
-Cov(Y_t, Y_{t-1})&=\mathbb{E}[Y_t Y_{t-1}] - \varphi_0^2\\
-&=\mathbb{E}[ \mathbb{E}[Y_t\mid Y_{t-1}]  Y_{t-1}] - \varphi_0^2\\
-&=\varphi_0^2 - \varphi_0^2\\
+Cov(Y_t, Y_{t-1})&=\mathbb{E}[Y_t Y_{t-1}] - \mu^2\\
+&=\mathbb{E}[ \mathbb{E}[Y_t\mid Y_{t-1}]  Y_{t-1}] - \mu^2\\
+&=\mu^2 - \mu^2\\
 &=0.
 \end{align*}
 Similarly, $Cov(Y_t, Y_{t-h})=0$ for all $h > 1$.
